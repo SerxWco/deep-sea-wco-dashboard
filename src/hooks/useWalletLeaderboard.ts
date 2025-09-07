@@ -93,33 +93,12 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
       }
       
       let allWallets: WalletData[] = isLoadMore ? wallets : [];
-      let nextPageParams: string | null = null;
-      let fetchCount = 0;
-      const maxPages = 100; // Safety limit to prevent infinite loops
-      
-      do {
-        let url = 'https://scan.w-chain.com/api/v2/addresses?items_count=50';
-        
-        // Handle next_page_params properly
-        if (nextPageParams) {
-          if (typeof nextPageParams === 'string') {
-            url += `&${nextPageParams}`;
-          } else if (typeof nextPageParams === 'object' && nextPageParams !== null) {
-            // Convert object to URLSearchParams
-            const params = new URLSearchParams();
-            Object.entries(nextPageParams).forEach(([key, value]) => {
-              if (value !== null && value !== undefined) {
-                params.append(key, String(value));
-              }
-            });
-            const paramString = params.toString();
-            if (paramString) {
-              url += `&${paramString}`;
-            }
-          }
-        }
-        
-        console.log(`Fetching page ${fetchCount + 1}, URL:`, url);
+      const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
+      let url = `${baseUrl}?items_count=50`;
+      let keepFetching = true;
+
+      while (keepFetching) {
+        console.log(`Fetching URL:`, url);
         const response = await fetch(url);
 
         if (!response.ok) {
@@ -147,40 +126,27 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
           };
         });
 
-        // Prevent duplicate wallets
-        const newWallets = processedWallets.filter(
-          wallet => !allWallets.some(existing => existing.address === wallet.address)
-        );
-
-        if (newWallets.length === 0 && processedWallets.length > 0) {
-          console.log('Detected duplicate page, stopping pagination');
-          break;
-        }
-
-        allWallets = [...allWallets, ...newWallets];
+        // Add new batch of wallets (no duplicate filtering to avoid complexity)
+        allWallets = [...allWallets, ...processedWallets];
         
         // Update UI with current batch for progressive loading
         setWallets([...allWallets]);
         
-        // Check for next page params
-        const prevNextPageParams = nextPageParams;
-        nextPageParams = result.next_page_params || null;
-        
-        // Safety check: if next_page_params hasn't changed, break to avoid infinite loop
-        if (nextPageParams && JSON.stringify(nextPageParams) === JSON.stringify(prevNextPageParams)) {
-          console.log('Next page params unchanged, stopping pagination');
-          break;
+        // Check if more pages exist
+        if (result.next_page_params) {
+          const params = new URLSearchParams(result.next_page_params).toString();
+          url = `${baseUrl}?items_count=50&${params}`;
+        } else {
+          keepFetching = false;
         }
         
-        fetchCount++;
-        console.log(`Fetched page ${fetchCount}, total wallets: ${allWallets.length}, has more: ${!!nextPageParams}`);
+        console.log(`Fetched page, total wallets: ${allWallets.length}, has more: ${keepFetching}`);
         
         // Add small delay between requests to avoid overwhelming the API
-        if (nextPageParams && fetchCount < maxPages) {
+        if (keepFetching) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
-        
-      } while (nextPageParams && fetchCount < maxPages);
+      }
 
       setHasMore(false);
       
