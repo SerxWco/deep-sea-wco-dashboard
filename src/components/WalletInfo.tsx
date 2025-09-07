@@ -28,8 +28,8 @@ export const WalletInfo = ({ walletInfo, onDisconnect }: WalletInfoProps) => {
     });
   };
 
-  const openEtherscan = () => {
-    window.open(`https://etherscan.io/address/${walletInfo.address}`, '_blank');
+  const openWChainScan = () => {
+    window.open(`https://scan.w-chain.com/address/${walletInfo.address}`, '_blank');
   };
 
   const wcoUsdValue = wcoData && parseFloat(walletInfo.wcoBalance) > 0 
@@ -57,13 +57,18 @@ export const WalletInfo = ({ walletInfo, onDisconnect }: WalletInfoProps) => {
             <Button variant="ghost" size="sm" onClick={copyAddress}>
               <Copy className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={openEtherscan}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={openWChainScan}
+              className="h-8 w-8 p-0"
+            >
               <ExternalLink className="h-4 w-4" />
             </Button>
           </div>
           
           <div className="text-sm text-muted-foreground">
-            ETH Balance: {formatNumber(parseFloat(walletInfo.balance))} ETH
+            WCO Balance: {formatNumber(parseFloat(walletInfo.balance))} WCO
           </div>
         </CardContent>
       </Card>

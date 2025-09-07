@@ -17,11 +17,18 @@ export interface UseWalletConnectionReturn {
   error: string | null;
 }
 
-const WCO_CONTRACT_ADDRESS = '0x4CCF0bb7c6c5A80168E8c978016B7CD1F92F1F62';
-const WCO_ABI = [
-  'function balanceOf(address owner) view returns (uint256)',
-  'function decimals() view returns (uint8)'
-];
+// W Chain network configuration
+const W_CHAIN_CONFIG = {
+  chainId: '0x29F05', // 171717 in hex
+  chainName: 'W Chain',
+  nativeCurrency: {
+    name: 'WCO',
+    symbol: 'WCO',
+    decimals: 18,
+  },
+  rpcUrls: ['https://rpc.w-chain.com'],
+  blockExplorerUrls: ['https://scan.w-chain.com/'],
+};
 
 export const useWalletConnection = (): UseWalletConnectionReturn => {
   const [isConnected, setIsConnected] = useState(false);
@@ -32,20 +39,33 @@ export const useWalletConnection = (): UseWalletConnectionReturn => {
 
   const getWalletBalance = async (address: string, provider: ethers.BrowserProvider): Promise<{ balance: string; wcoBalance: string }> => {
     try {
-      // Get ETH balance
-      const ethBalance = await provider.getBalance(address);
-      const balance = ethers.formatEther(ethBalance);
+      // Get WCO balance (native token on W Chain)
+      const wcoBalance = await provider.getBalance(address);
+      const balance = ethers.formatEther(wcoBalance);
 
-      // Get WCO balance
-      const wcoContract = new ethers.Contract(WCO_CONTRACT_ADDRESS, WCO_ABI, provider);
-      const wcoBalanceRaw = await wcoContract.balanceOf(address);
-      const decimals = await wcoContract.decimals();
-      const wcoBalance = ethers.formatUnits(wcoBalanceRaw, decimals);
-
-      return { balance, wcoBalance };
+      return { balance, wcoBalance: balance };
     } catch (err) {
-      console.error('Error fetching balances:', err);
+      console.error('Error fetching WCO balance:', err);
       return { balance: '0', wcoBalance: '0' };
+    }
+  };
+
+  const switchToWChain = async () => {
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: W_CHAIN_CONFIG.chainId }],
+      });
+    } catch (switchError: any) {
+      // Chain not added to wallet, try to add it
+      if (switchError.code === 4902) {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [W_CHAIN_CONFIG],
+        });
+      } else {
+        throw switchError;
+      }
     }
   };
 
@@ -69,6 +89,9 @@ export const useWalletConnection = (): UseWalletConnectionReturn => {
         throw new Error('MetaMask not detected. Please install MetaMask or select Rabby.');
       }
 
+      // Switch to W Chain first
+      await switchToWChain();
+      
       const provider = new ethers.BrowserProvider(window.ethereum);
       
       // Request account access
@@ -92,7 +115,7 @@ export const useWalletConnection = (): UseWalletConnectionReturn => {
       setIsConnected(true);
       toast({
         title: 'Wallet Connected',
-        description: `Successfully connected to ${walletType === 'metamask' ? 'MetaMask' : 'Rabby'}`
+        description: `Successfully connected to ${walletType === 'metamask' ? 'MetaMask' : 'Rabby'} on W Chain`
       });
 
     } catch (err: any) {
@@ -127,12 +150,16 @@ export const useWalletConnection = (): UseWalletConnectionReturn => {
           });
           
           if (accounts.length > 0) {
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const address = accounts[0];
-            const { balance, wcoBalance } = await getWalletBalance(address, provider);
-            
-            setWalletInfo({ address, balance, wcoBalance });
-            setIsConnected(true);
+            // Check if we're on W Chain
+            const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+            if (chainId === W_CHAIN_CONFIG.chainId) {
+              const provider = new ethers.BrowserProvider(window.ethereum);
+              const address = accounts[0];
+              const { balance, wcoBalance } = await getWalletBalance(address, provider);
+              
+              setWalletInfo({ address, balance, wcoBalance });
+              setIsConnected(true);
+            }
           }
         } catch (err) {
           console.error('Error checking wallet connection:', err);
