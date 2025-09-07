@@ -33,8 +33,12 @@ export const ALL_CATEGORIES: CategoryInfo[] = [
 interface UseWalletLeaderboardReturn {
   wallets: WalletData[];
   loading: boolean;
+  loadingMore: boolean;
   error: string | null;
   refetch: () => void;
+  loadMore: () => void;
+  hasMore: boolean;
+  totalFetched: number;
   allCategories: CategoryInfo[];
 }
 
@@ -73,15 +77,28 @@ const categorizeWallet = (balance: number, address: string): { category: string;
 export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   const [wallets, setWallets] = useState<WalletData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
-  const fetchWalletData = async () => {
+  const fetchWalletData = async (page: number = 1, isLoadMore: boolean = false) => {
     try {
-      setLoading(true);
-      setError(null);
+      if (isLoadMore) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+        setError(null);
+        setWallets([]);
+        setCurrentPage(1);
+        setHasMore(true);
+      }
+      
+      const itemsPerPage = 100;
+      const offset = (page - 1) * itemsPerPage;
       
       const response = await fetch(
-        'https://scan.w-chain.com/api/v2/addresses?items_count=50'
+        `https://scan.w-chain.com/api/v2/addresses?items_count=${itemsPerPage}&offset=${offset}`
       );
 
       if (!response.ok) {
@@ -109,12 +126,28 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         };
       });
 
-      setWallets(processedWallets);
+      if (isLoadMore) {
+        setWallets(prev => [...prev, ...processedWallets]);
+      } else {
+        setWallets(processedWallets);
+      }
+
+      // Check if we have more data
+      setHasMore(processedWallets.length === itemsPerPage);
+      setCurrentPage(page);
+      
     } catch (err) {
       console.error('Error fetching wallet data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch wallet data');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMore = async () => {
+    if (!loadingMore && hasMore) {
+      await fetchWalletData(currentPage + 1, true);
     }
   };
 
@@ -125,8 +158,12 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   return { 
     wallets, 
     loading, 
+    loadingMore,
     error, 
-    refetch: fetchWalletData,
+    refetch: () => fetchWalletData(1, false),
+    loadMore,
+    hasMore,
+    totalFetched: wallets.length,
     allCategories: ALL_CATEGORIES,
   };
 };

@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,11 +10,12 @@ import { useWCOMarketData } from '@/hooks/useWCOMarketData';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 
 export function WalletLeaderboard() {
-  const { wallets, loading, error, refetch, allCategories } = useWalletLeaderboard();
+  const { wallets, loading, loadingMore, error, refetch, loadMore, hasMore, totalFetched, allCategories } = useWalletLeaderboard();
   const { data: marketData } = useWCOMarketData();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const wcoPrice = marketData?.current_price || 0;
 
@@ -68,6 +69,24 @@ export function WalletLeaderboard() {
     setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
   };
 
+  // Infinite scroll implementation
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, loadMore]);
+
   if (loading) {
     return (
       <Card className="w-full bg-gradient-to-br from-background/80 to-background/40 backdrop-blur-md border-border/20">
@@ -100,6 +119,9 @@ export function WalletLeaderboard() {
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-foreground flex items-center gap-2">
           🌊 Ocean Leaderboard
+          <Badge variant="secondary" className="ml-2">
+            {totalFetched.toLocaleString()} wallets loaded
+          </Badge>
         </CardTitle>
         
         <div className="flex flex-col sm:flex-row gap-4 mt-4">
@@ -213,6 +235,32 @@ export function WalletLeaderboard() {
         {wallets.length === 0 && !loading && (
           <div className="text-center py-8 text-muted-foreground">
             {searchTerm ? 'No wallets found matching your search.' : 'No wallet data available.'}
+          </div>
+        )}
+
+        {/* Load More Section */}
+        {hasMore && !loading && (
+          <div ref={loadMoreRef} className="mt-6 text-center">
+            {loadingMore ? (
+              <div className="flex items-center justify-center gap-2 py-4">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-muted-foreground">Loading more wallets...</span>
+              </div>
+            ) : (
+              <Button 
+                onClick={loadMore} 
+                variant="outline" 
+                className="bg-background/50 border-border/30"
+              >
+                Load More Wallets
+              </Button>
+            )}
+          </div>
+        )}
+
+        {!hasMore && wallets.length > 0 && (
+          <div className="text-center py-4 text-muted-foreground text-sm">
+            🎉 All available wallets loaded ({totalFetched.toLocaleString()} total)
           </div>
         )}
       </CardContent>
