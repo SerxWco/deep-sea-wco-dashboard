@@ -8,11 +8,34 @@ export interface WalletData {
   txCount: number;
 }
 
+export interface CategoryInfo {
+  name: string;
+  emoji: string;
+  minBalance: number;
+  maxBalance?: number;
+}
+
+// Define all ocean creature categories in order from largest to smallest
+export const ALL_CATEGORIES: CategoryInfo[] = [
+  { name: 'Flagship', emoji: '🛳️', minBalance: 0 }, // Team wallets
+  { name: 'Harbor', emoji: '⚓', minBalance: 0 }, // Exchange wallets
+  { name: 'Kraken', emoji: '🦑', minBalance: 5000000 },
+  { name: 'Whale', emoji: '🐋', minBalance: 1000001, maxBalance: 4999999 },
+  { name: 'Shark', emoji: '🦈', minBalance: 500001, maxBalance: 1000000 },
+  { name: 'Dolphin', emoji: '🐬', minBalance: 100001, maxBalance: 500000 },
+  { name: 'Fish', emoji: '🐟', minBalance: 50001, maxBalance: 100000 },
+  { name: 'Octopus', emoji: '🐙', minBalance: 10001, maxBalance: 50000 },
+  { name: 'Crab', emoji: '🦀', minBalance: 1001, maxBalance: 10000 },
+  { name: 'Shrimp', emoji: '🦐', minBalance: 1, maxBalance: 1000 },
+  { name: 'Plankton', emoji: '🦠', minBalance: 0, maxBalance: 0.999 },
+];
+
 interface UseWalletLeaderboardReturn {
   wallets: WalletData[];
   loading: boolean;
   error: string | null;
   refetch: () => void;
+  allCategories: CategoryInfo[];
 }
 
 // Known exchange addresses (add actual addresses here)
@@ -103,6 +126,7 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
     wallets, 
     loading, 
     error, 
-    refetch: fetchWalletData 
+    refetch: fetchWalletData,
+    allCategories: ALL_CATEGORIES,
   };
 };

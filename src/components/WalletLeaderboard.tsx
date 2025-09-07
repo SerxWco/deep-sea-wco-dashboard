@@ -5,12 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { useWalletLeaderboard, WalletData } from '@/hooks/useWalletLeaderboard';
+import { useWalletLeaderboard, WalletData, CategoryInfo } from '@/hooks/useWalletLeaderboard';
 import { useWCOMarketData } from '@/hooks/useWCOMarketData';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 
 export function WalletLeaderboard() {
-  const { wallets, loading, error, refetch } = useWalletLeaderboard();
+  const { wallets, loading, error, refetch, allCategories } = useWalletLeaderboard();
   const { data: marketData } = useWCOMarketData();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -33,17 +33,25 @@ export function WalletLeaderboard() {
   }, [wallets, searchTerm, sortOrder]);
 
   const groupedWallets = useMemo(() => {
-    const groups: Record<string, WalletData[]> = {};
+    // Initialize all categories with empty arrays
+    const groups: Record<string, { wallets: WalletData[]; categoryInfo: CategoryInfo }> = {};
     
+    allCategories.forEach(categoryInfo => {
+      groups[categoryInfo.name] = {
+        wallets: [],
+        categoryInfo
+      };
+    });
+    
+    // Fill with actual wallet data
     filteredAndSortedWallets.forEach(wallet => {
-      if (!groups[wallet.category]) {
-        groups[wallet.category] = [];
+      if (groups[wallet.category]) {
+        groups[wallet.category].wallets.push(wallet);
       }
-      groups[wallet.category].push(wallet);
     });
 
     return groups;
-  }, [filteredAndSortedWallets]);
+  }, [filteredAndSortedWallets, allCategories]);
 
   const formatAddress = (address: string): string => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -127,72 +135,82 @@ export function WalletLeaderboard() {
 
       <CardContent className="p-6 pt-0">
         <div className="space-y-4">
-          {Object.entries(groupedWallets).map(([category, categoryWallets]) => {
-            const firstWallet = categoryWallets[0];
-            if (!firstWallet) return null;
-
+          {allCategories.map((categoryInfo) => {
+            const categoryData = groupedWallets[categoryInfo.name];
+            const categoryWallets = categoryData?.wallets || [];
+            const hasWallets = categoryWallets.length > 0;
+            
             return (
               <Collapsible
-                key={category}
-                open={openCategories[category]}
-                onOpenChange={() => toggleCategory(category)}
+                key={categoryInfo.name}
+                open={openCategories[categoryInfo.name]}
+                onOpenChange={() => toggleCategory(categoryInfo.name)}
               >
                 <CollapsibleTrigger asChild>
-                  <Card className="cursor-pointer hover:bg-accent/50 transition-colors bg-gradient-to-r from-background/60 to-background/30 border-border/30">
+                  <Card className={`cursor-pointer transition-all duration-200 bg-gradient-to-r from-background/60 to-background/30 border-border/30 ${
+                    hasWallets 
+                      ? 'hover:bg-accent/50 hover:shadow-md' 
+                      : 'opacity-60 hover:opacity-80'
+                  }`}>
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <span className="text-2xl">{firstWallet.emoji}</span>
-                          <span className="font-semibold text-lg">{category}</span>
+                          <span className="text-2xl">{categoryInfo.emoji}</span>
+                          <span className="font-semibold text-lg">{categoryInfo.name}</span>
                         </div>
-                        <Badge variant="secondary" className="bg-primary/20 text-primary">
-                          {categoryWallets.length} wallets
+                        <Badge 
+                          variant={hasWallets ? "default" : "secondary"} 
+                          className={hasWallets ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}
+                        >
+                          {categoryWallets.length} wallet{categoryWallets.length !== 1 ? 's' : ''}
                         </Badge>
                       </div>
                     </CardContent>
                   </Card>
                 </CollapsibleTrigger>
 
-                <CollapsibleContent className="mt-2">
-                  <div className="space-y-2 ml-4">
-                    {categoryWallets.map((wallet, index) => (
-                      <Card key={wallet.address} className="bg-background/40 border-border/20">
-                        <CardContent className="p-4">
-                           <div className="flex items-center justify-between">
-                             <div className="flex items-center gap-3">
-                               <span className="text-muted-foreground font-mono text-sm">
-                                 #{index + 1}
-                               </span>
-                               <div>
-                                 <div className="font-mono text-sm">
-                                   {formatAddress(wallet.address)}
+                {hasWallets && (
+                  <CollapsibleContent className="mt-2">
+                    <div className="space-y-2 ml-4">
+                      {categoryWallets.map((wallet, index) => (
+                        <Card key={wallet.address} className="bg-background/40 border-border/20">
+                          <CardContent className="p-4">
+                             <div className="flex items-center justify-between">
+                               <div className="flex items-center gap-3">
+                                 <span className="text-muted-foreground font-mono text-sm">
+                                   #{index + 1}
+                                 </span>
+                                 <div>
+                                   <div className="font-mono text-sm">
+                                     {formatAddress(wallet.address)}
+                                   </div>
+                                   <div className="text-xs text-muted-foreground">
+                                     {wallet.txCount.toLocaleString()} txns
+                                   </div>
                                  </div>
-                                 <div className="text-xs text-muted-foreground">
-                                   {wallet.txCount.toLocaleString()} txns
+                               </div>
+                               
+                               <div className="text-right">
+                                 <div className="font-semibold">
+                                   {formatNumber(wallet.balance)} WCO
+                                 </div>
+                                 <div className="text-sm text-muted-foreground">
+                                   {formatCurrency(wallet.balance * wcoPrice)}
                                  </div>
                                </div>
                              </div>
-                             
-                             <div className="text-right">
-                               <div className="font-semibold">
-                                 {formatNumber(wallet.balance)} WCO
-                               </div>
-                               <div className="text-sm text-muted-foreground">
-                                 {formatCurrency(wallet.balance * wcoPrice)}
-                               </div>
-                             </div>
-                           </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </CollapsibleContent>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                )}
               </Collapsible>
             );
           })}
         </div>
 
-        {Object.keys(groupedWallets).length === 0 && (
+        {wallets.length === 0 && !loading && (
           <div className="text-center py-8 text-muted-foreground">
             {searchTerm ? 'No wallets found matching your search.' : 'No wallet data available.'}
           </div>
