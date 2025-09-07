@@ -24,7 +24,7 @@ export const TokenListItem = ({ token, balance, hasWallet }: TokenListItemProps)
   };
 
   const openScanner = () => {
-    window.open(`https://scan.w-chain.com/token/${token.address}`, '_blank');
+    window.open(`https://w-chain.com`, '_blank');
   };
 
   const formatAddress = (address: string) => {
