@@ -30,6 +30,13 @@ const W_CHAIN_CONFIG = {
   blockExplorerUrls: ['https://scan.w-chain.com/'],
 };
 
+// Alternative chain ID formats to try if the first one fails
+const ALTERNATIVE_CHAIN_IDS = [
+  '0x29F05', // 171717 in hex (standard format)
+  171717,    // decimal format
+  '171717'   // string format
+];
+
 export const useWalletConnection = (): UseWalletConnectionReturn => {
   const [isConnected, setIsConnected] = useState(false);
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
@@ -52,19 +59,33 @@ export const useWalletConnection = (): UseWalletConnectionReturn => {
 
   const switchToWChain = async () => {
     try {
+      console.log('Attempting to switch to W Chain with config:', W_CHAIN_CONFIG);
+      
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: W_CHAIN_CONFIG.chainId }],
       });
+      
+      console.log('Successfully switched to W Chain');
     } catch (switchError: any) {
+      console.log('Switch error:', switchError);
+      
       // Chain not added to wallet, try to add it
       if (switchError.code === 4902) {
-        await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [W_CHAIN_CONFIG],
-        });
+        console.log('Adding W Chain network to wallet...');
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [W_CHAIN_CONFIG],
+          });
+          console.log('Successfully added W Chain network');
+        } catch (addError: any) {
+          console.error('Failed to add W Chain network:', addError);
+          throw new Error(`Failed to add W Chain network: ${addError.message}`);
+        }
       } else {
-        throw switchError;
+        console.error('Failed to switch to W Chain:', switchError);
+        throw new Error(`Failed to switch to W Chain: ${switchError.message}`);
       }
     }
   };
