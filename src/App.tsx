@@ -8,6 +8,7 @@ import { TradingViewChart } from "@/components/TradingViewChart";
 import Dashboard from "./pages/Dashboard";
 import OceanCreatures from "./pages/OceanCreatures";
 import Portfolio from "./pages/Portfolio";
+import Tokens from "./pages/Tokens";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,10 +42,7 @@ const App = () => (
           } />
           <Route path="/tokens" element={
             <DashboardLayout>
-              <div className="p-6 text-center">
-                <h1 className="text-2xl font-bold text-foreground mb-4">Tokens</h1>
-                <p className="text-muted-foreground">Coming soon...</p>
-              </div>
+              <Tokens />
             </DashboardLayout>
           } />
           <Route path="/whales" element={
