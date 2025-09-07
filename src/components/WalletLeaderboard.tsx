@@ -202,14 +202,19 @@ export function WalletLeaderboard() {
                                  <span className="text-muted-foreground font-mono text-sm">
                                    #{index + 1}
                                  </span>
-                                 <div>
-                                   <div className="font-mono text-sm">
-                                     {formatAddress(wallet.address)}
-                                   </div>
-                                   <div className="text-xs text-muted-foreground">
-                                     {wallet.txCount.toLocaleString()} txns
-                                   </div>
-                                 </div>
+                                  <div>
+                                    <div className="font-mono text-sm">
+                                      {formatAddress(wallet.address)}
+                                    </div>
+                                    {wallet.label && (
+                                      <div className="text-xs text-primary font-medium">
+                                        {wallet.label}
+                                      </div>
+                                    )}
+                                    <div className="text-xs text-muted-foreground">
+                                      {wallet.txCount.toLocaleString()} txns
+                                    </div>
+                                  </div>
                                </div>
                                
                                <div className="text-right">
