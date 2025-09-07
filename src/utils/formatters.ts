@@ -19,7 +19,7 @@ export const formatPercentage = (value: number): string => {
   return `${sign}${value.toFixed(2)}%`;
 };
 
-export const formatNumber = (value: number): string => {
+export const formatNumber = (value: number, decimals?: number): string => {
   if (value >= 1e9) {
     return `${(value / 1e9).toFixed(2)}B`;
   }
@@ -28,6 +28,9 @@ export const formatNumber = (value: number): string => {
   }
   if (value >= 1e3) {
     return `${(value / 1e3).toFixed(1)}K`;
+  }
+  if (decimals !== undefined) {
+    return value.toFixed(decimals);
   }
   return value.toLocaleString();
 };
