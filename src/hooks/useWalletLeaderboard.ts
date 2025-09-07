@@ -45,23 +45,23 @@ interface UseWalletLeaderboardReturn {
 
 // Define special wallets
 const FLAGSHIP_WALLETS: Record<string, string> = {
-  "0xfAc510D5dB8cadfF323D4b979D898dc38F3FB6dF": "Validation Nodes",
-  "0x511A6355407Bb78f26172DB35100A87B9bE20Fc3": "Liquidity Provision",
-  "0x2ca9472ADd8a02c74D50FC3Ea444548502E35BDb": "Marketing & Community",
-  "0xa306799eE31c7f89D3ff82D3397972933d57d679": "Premium Account Features",
-  "0x94DbFF05e1C129869772E1Fb291901083CdAdef1": "W Chain Ecosystem",
-  "0x58213DD561d12a0Ea7b538B1b26DE34dACe1D0F0": "Developer Incentives",
-  "0x13768af351B4627dcE8De6A67e59e4b27B4Cbf5D": "Exchange Listings",
-  "0xa237FeAFa2BAc4096867aF6229a2370B7A661A5F": "Incentives",
-  "0xFC06231E2e448B778680202BEA8427884c011341": "Institutional Sales",
-  "0x80eaBD19b84b4f5f042103e957964297589C657D": "Enterprises & Partnerships",
-  "0x57Ab15Ca8Bd528D509DbC81d11E9BecA44f3445f": "Development Fund",
-  "0xba9Be06936C806AEfAd981Ae96fa4D599B78aD24": "WTK Conversion / Total Supply",
-  "0x67F2696c125D8D1307a5aE17348A440718229D03": "Treasury Wallet",
+  "0xfac510d5db8cadff323d4b979d898dc38f3fb6df": "Validation Nodes",
+  "0x511a6355407bb78f26172db35100a87b9be20fc3": "Liquidity Provision",
+  "0x2ca9472add8a02c74d50fc3ea444548502e35bdb": "Marketing & Community",
+  "0xa306799ee31c7f89d3ff82d3397972933d57d679": "Premium Account Features",
+  "0x94dbff05e1c129869772e1fb291901083cdadef1": "W Chain Ecosystem",
+  "0x58213dd561d12a0ea7b538b1b26de34dace1d0f0": "Developer Incentives",
+  "0x13768af351b4627dce8de6a67e59e4b27b4cbf5d": "Exchange Listings",
+  "0xa237feafa2bac4096867af6229a2370b7a661a5f": "Incentives",
+  "0xfc06231e2e448b778680202bea8427884c011341": "Institutional Sales",
+  "0x80eabd19b84b4f5f042103e957964297589c657d": "Enterprises & Partnerships",
+  "0x57ab15ca8bd528d509dbc81d11e9beca44f3445f": "Development Fund",
+  "0xba9be06936c806aefad981ae96fa4d599b78ad24": "WTK Conversion / Total Supply",
+  "0x67f2696c125d8d1307a5ae17348a440718229d03": "Treasury Wallet",
 };
 
 const WRAPPED_WCO = [
-  "0xEdB8008031141024d50cA2839A607B2f82C1c045"
+  "0xedb8008031141024d50ca2839a607b2f82c1c045"
 ];
 
 const categorizeWallet = (balance: number, address: string): { category: string; emoji: string; label?: string } => {
