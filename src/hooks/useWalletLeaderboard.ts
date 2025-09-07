@@ -19,7 +19,8 @@ export interface CategoryInfo {
 // Define all ocean creature categories in order from largest to smallest
 export const ALL_CATEGORIES: CategoryInfo[] = [
   { name: 'Flagship', emoji: '🚩', minBalance: 0 }, // Team wallets
-  { name: 'Bridge/Wrapped', emoji: '⚓', minBalance: 0 }, // Wrapped contracts
+  { name: 'Harbor', emoji: '⚓', minBalance: 0 }, // Exchange wallets
+  { name: 'Bridge/Wrapped', emoji: '🌉', minBalance: 0 }, // Wrapped contracts
   { name: 'Kraken', emoji: '🦑', minBalance: 5000000 },
   { name: 'Whale', emoji: '🐋', minBalance: 1000001, maxBalance: 4999999 },
   { name: 'Shark', emoji: '🦈', minBalance: 500001, maxBalance: 1000000 },
@@ -60,6 +61,11 @@ const FLAGSHIP_WALLETS: Record<string, string> = {
   "0x67f2696c125d8d1307a5ae17348a440718229d03": "Treasury Wallet",
 };
 
+const EXCHANGE_WALLETS: Record<string, string> = {
+  // Add known exchange addresses here
+  // Example: "0x1234...": "Binance Hot Wallet",
+};
+
 const WRAPPED_WCO = [
   "0xedb8008031141024d50ca2839a607b2f82c1c045"
 ];
@@ -73,9 +79,15 @@ const categorizeWallet = (balance: number, address: string): { category: string;
     return { category: 'Flagship', emoji: '🚩', label: flagshipLabel };
   }
 
+  // Check if address is an exchange wallet
+  const exchangeLabel = EXCHANGE_WALLETS[addr];
+  if (exchangeLabel) {
+    return { category: 'Harbor', emoji: '⚓', label: exchangeLabel };
+  }
+
   // Check if address is wrapped WCO contract
   if (WRAPPED_WCO.includes(addr)) {
-    return { category: 'Bridge/Wrapped', emoji: '⚓', label: 'Wrapped WCO Contract' };
+    return { category: 'Bridge/Wrapped', emoji: '🌉', label: 'Wrapped WCO Contract' };
   }
 
   // Ocean Creatures categorization by balance
