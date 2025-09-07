@@ -60,7 +60,7 @@ export default function Tokens() {
           <h1 className="text-3xl font-bold text-foreground">W Chain Tokens</h1>
         </div>
         <p className="text-muted-foreground">
-          Explore all tokens on the W Chain network. Connect your wallet to view your holdings.
+          Discover and explore tokens in the W Chain ecosystem. Search, filter, and find tokens by name, symbol, or address.
         </p>
       </div>
 
@@ -75,7 +75,7 @@ export default function Tokens() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">
-              Connect your wallet to view your token balances and portfolio allocation.
+              Connect your wallet to highlight tokens you own and view balances.
             </p>
             <WalletConnectButton 
               onConnect={connectWallet} 
@@ -98,9 +98,7 @@ export default function Tokens() {
       {/* Token Stats */}
       <TokenStats
         totalTokens={tokens.length}
-        ownedTokens={balances}
-        loading={tokensLoading || balancesLoading}
-        hasWallet={isConnected}
+        loading={tokensLoading}
       />
 
       {/* Search and Filters */}

@@ -54,9 +54,15 @@ export const useWChainTokens = (): UseWChainTokensReturn => {
           throw new Error(`Failed to fetch tokens: ${response.statusText}`);
         }
 
-        const data: WChainTokensResponse = await response.json();
-        allTokens = [...allTokens, ...data.items];
-        nextPageParams = data.next_page_params;
+      const data: WChainTokensResponse = await response.json();
+      // Deduplicate tokens by address to avoid duplicates across pages
+      const newTokens = data.items.filter(
+        token => !allTokens.some(existing => 
+          existing.address.toLowerCase() === token.address.toLowerCase()
+        )
+      );
+      allTokens = [...allTokens, ...newTokens];
+      nextPageParams = data.next_page_params;
         page++;
       } while (nextPageParams && page <= maxPages);
 
