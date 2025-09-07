@@ -37,17 +37,24 @@ export function OceanSidebar() {
 
   return (
     <Sidebar className="border-r border-sidebar-border bg-depth-gradient">
-      <div className="p-6 border-b border-sidebar-border/30">
-        <div className="flex items-center gap-3">
-          <img 
-            src={wcoLogo} 
-            alt="WCO Ocean Hub" 
-            className="h-10 w-10 rounded-lg glow-aqua"
-          />
+      <div className="p-6 border-b border-sidebar-border/30 bg-sidebar-accent/20">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <img 
+              src={wcoLogo} 
+              alt="WCO Ocean Hub" 
+              className="h-16 w-16 rounded-xl glow-intense hover:scale-110 transition-bounce"
+            />
+            <div className="absolute -inset-1 bg-gradient-to-r from-accent/20 to-accent/40 rounded-xl blur opacity-75"></div>
+          </div>
           {!collapsed && (
-            <div>
-              <h1 className="text-lg font-bold text-foreground">WCO</h1>
-              <p className="text-xs text-muted-foreground">Ocean Hub</p>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-bold text-foreground tracking-tight">WCO</h1>
+              <p className="text-sm text-accent font-medium">Ocean Hub</p>
+              <div className="flex items-center gap-1 text-xs text-success">
+                <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+                <span>Live</span>
+              </div>
             </div>
           )}
         </div>
