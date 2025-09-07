@@ -4,10 +4,8 @@ import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { TokenSearch } from '@/components/TokenSearch';
 import { TokenStats } from '@/components/TokenStats';
 import { TokenList } from '@/components/TokenList';
-import { WalletConnectButton } from '@/components/WalletConnectButton';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Wallet, AlertCircle, Coins } from 'lucide-react';
+import { AlertCircle, Coins } from 'lucide-react';
 
 export default function Tokens() {
   const { 
@@ -64,26 +62,6 @@ export default function Tokens() {
         </p>
       </div>
 
-      {/* Wallet Connection Status */}
-      {!isConnected && (
-        <Card className="glass-ocean border-primary/20">
-          <CardHeader>
-            <CardTitle className="text-foreground flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-primary" />
-              Connect Wallet
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">
-              Connect your wallet to highlight tokens you own and view balances.
-            </p>
-            <WalletConnectButton 
-              onConnect={connectWallet} 
-              isConnecting={isConnecting} 
-            />
-          </CardContent>
-        </Card>
-      )}
 
       {/* Error Alerts */}
       {(walletError || tokensError || balancesError) && (
