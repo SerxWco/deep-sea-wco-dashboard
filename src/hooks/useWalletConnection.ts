@@ -87,24 +87,11 @@ export const useWalletConnection = (): UseWalletConnectionReturn => {
     } catch (switchError: any) {
       console.log('Switch error:', switchError);
       
-      // If chain not found (4902), try to add it
-      if (switchError.code === 4902) {
-        console.log('W Chain not found in wallet, adding network...');
-        try {
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [W_CHAIN_CONFIG],
-          });
-          console.log('Successfully added W Chain network');
-        } catch (addError: any) {
-          console.error('Failed to add W Chain network:', addError);
-          throw new Error(`Failed to add W Chain network. Please add it manually using Chain ID: 171717, RPC: https://rpc.w-chain.com`);
-        }
-      } else if (switchError.code === 4001) {
+      if (switchError.code === 4001) {
         throw new Error('Network switch was rejected by user');
       } else {
         console.error('Failed to switch to W Chain:', switchError);
-        throw new Error(`Network switch failed. Please switch to W Chain manually in your wallet.`);
+        throw new Error(`Please switch to W Chain manually in your wallet (Chain ID: 171717)`);
       }
     }
   };
