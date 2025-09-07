@@ -19,7 +19,7 @@ export interface UseWalletConnectionReturn {
 
 // W Chain network configuration
 const W_CHAIN_CONFIG = {
-  chainId: '0x29f05', // 171717 in hex (lowercase - MetaMask standard)
+  chainId: '0x29ec5', // 171717 in hex (lowercase - MetaMask standard)
   chainName: 'W Chain',
   nativeCurrency: {
     name: 'WCO',
@@ -32,8 +32,8 @@ const W_CHAIN_CONFIG = {
 
 // Alternative chain ID formats to try if the first one fails
 const ALTERNATIVE_CHAIN_IDS = [
-  '0x29f05', // 171717 in hex (lowercase - standard format)
-  '0x29F05', // 171717 in hex (uppercase)
+  '0x29ec5', // 171717 in hex (lowercase - standard format)
+  '0x29EC5', // 171717 in hex (uppercase)
   171717,    // decimal format
   '171717'   // string format
 ];
