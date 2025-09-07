@@ -19,7 +19,7 @@ export interface UseWalletConnectionReturn {
 
 // W Chain network configuration
 const W_CHAIN_CONFIG = {
-  chainId: '0x29F05', // 171717 in hex
+  chainId: '0x29f05', // 171717 in hex (lowercase - MetaMask standard)
   chainName: 'W Chain',
   nativeCurrency: {
     name: 'WCO',
@@ -32,7 +32,8 @@ const W_CHAIN_CONFIG = {
 
 // Alternative chain ID formats to try if the first one fails
 const ALTERNATIVE_CHAIN_IDS = [
-  '0x29F05', // 171717 in hex (standard format)
+  '0x29f05', // 171717 in hex (lowercase - standard format)
+  '0x29F05', // 171717 in hex (uppercase)
   171717,    // decimal format
   '171717'   // string format
 ];
@@ -57,10 +58,26 @@ export const useWalletConnection = (): UseWalletConnectionReturn => {
     }
   };
 
+  const isOnWChain = (chainId: string): boolean => {
+    return ALTERNATIVE_CHAIN_IDS.some(id => 
+      chainId.toLowerCase() === String(id).toLowerCase()
+    );
+  };
+
   const switchToWChain = async () => {
     try {
+      // First check if we're already on W Chain
+      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+      console.log('Current chain ID:', currentChainId);
+      
+      if (isOnWChain(currentChainId)) {
+        console.log('Already on W Chain, skipping switch');
+        return;
+      }
+
       console.log('Attempting to switch to W Chain with config:', W_CHAIN_CONFIG);
       
+      // Try switching with primary chain ID
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: W_CHAIN_CONFIG.chainId }],
@@ -70,9 +87,9 @@ export const useWalletConnection = (): UseWalletConnectionReturn => {
     } catch (switchError: any) {
       console.log('Switch error:', switchError);
       
-      // Chain not added to wallet, try to add it
+      // If chain not found (4902), try to add it
       if (switchError.code === 4902) {
-        console.log('Adding W Chain network to wallet...');
+        console.log('W Chain not found in wallet, adding network...');
         try {
           await window.ethereum.request({
             method: 'wallet_addEthereumChain',
@@ -81,11 +98,13 @@ export const useWalletConnection = (): UseWalletConnectionReturn => {
           console.log('Successfully added W Chain network');
         } catch (addError: any) {
           console.error('Failed to add W Chain network:', addError);
-          throw new Error(`Failed to add W Chain network: ${addError.message}`);
+          throw new Error(`Failed to add W Chain network. Please add it manually using Chain ID: 171717, RPC: https://rpc.w-chain.com`);
         }
+      } else if (switchError.code === 4001) {
+        throw new Error('Network switch was rejected by user');
       } else {
         console.error('Failed to switch to W Chain:', switchError);
-        throw new Error(`Failed to switch to W Chain: ${switchError.message}`);
+        throw new Error(`Network switch failed. Please switch to W Chain manually in your wallet.`);
       }
     }
   };
@@ -171,9 +190,9 @@ export const useWalletConnection = (): UseWalletConnectionReturn => {
           });
           
           if (accounts.length > 0) {
-            // Check if we're on W Chain
+            // Check if we're on W Chain using multiple chain ID formats
             const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-            if (chainId === W_CHAIN_CONFIG.chainId) {
+            if (isOnWChain(chainId)) {
               const provider = new ethers.BrowserProvider(window.ethereum);
               const address = accounts[0];
               const { balance, wcoBalance } = await getWalletBalance(address, provider);
