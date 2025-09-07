@@ -158,25 +158,30 @@ export function WalletLeaderboard() {
                     {categoryWallets.map((wallet, index) => (
                       <Card key={wallet.address} className="bg-background/40 border-border/20">
                         <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <span className="text-muted-foreground font-mono text-sm">
-                                #{index + 1}
-                              </span>
-                              <span className="font-mono text-sm">
-                                {formatAddress(wallet.address)}
-                              </span>
-                            </div>
-                            
-                            <div className="text-right">
-                              <div className="font-semibold">
-                                {formatNumber(wallet.balance)} WCO
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {formatCurrency(wallet.balance * wcoPrice)}
-                              </div>
-                            </div>
-                          </div>
+                           <div className="flex items-center justify-between">
+                             <div className="flex items-center gap-3">
+                               <span className="text-muted-foreground font-mono text-sm">
+                                 #{index + 1}
+                               </span>
+                               <div>
+                                 <div className="font-mono text-sm">
+                                   {formatAddress(wallet.address)}
+                                 </div>
+                                 <div className="text-xs text-muted-foreground">
+                                   {wallet.txCount.toLocaleString()} txns
+                                 </div>
+                               </div>
+                             </div>
+                             
+                             <div className="text-right">
+                               <div className="font-semibold">
+                                 {formatNumber(wallet.balance)} WCO
+                               </div>
+                               <div className="text-sm text-muted-foreground">
+                                 {formatCurrency(wallet.balance * wcoPrice)}
+                               </div>
+                             </div>
+                           </div>
                         </CardContent>
                       </Card>
                     ))}

@@ -5,6 +5,7 @@ export interface WalletData {
   balance: number;
   category: string;
   emoji: string;
+  txCount: number;
 }
 
 interface UseWalletLeaderboardReturn {
@@ -57,7 +58,7 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
       setError(null);
       
       const response = await fetch(
-        'https://scan.w-chain.com/api/addresses?limit=100&sort=balance'
+        'https://scan.w-chain.com/api/v2/addresses?items_count=50'
       );
 
       if (!response.ok) {
@@ -66,21 +67,22 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
 
       const result = await response.json();
       
-      if (!result || !Array.isArray(result)) {
+      if (!result || !result.items || !Array.isArray(result.items)) {
         throw new Error('Invalid data format from W-Chain API');
       }
 
-      const processedWallets: WalletData[] = result.map((account: any) => {
-        // Convert balance from wei to WCO (divide by 1e18)
-        const balanceWei = parseFloat(account.balance) || 0;
+      const processedWallets: WalletData[] = result.items.map((account: any) => {
+        // Convert coin_balance from wei to WCO (divide by 1e18)
+        const balanceWei = parseFloat(account.coin_balance) || 0;
         const balance = balanceWei / 1e18;
-        const { category, emoji } = categorizeWallet(balance, account.address);
+        const { category, emoji } = categorizeWallet(balance, account.hash);
         
         return {
-          address: account.address,
+          address: account.hash,
           balance,
           category,
           emoji,
+          txCount: parseInt(account.tx_count) || 0,
         };
       });
 
