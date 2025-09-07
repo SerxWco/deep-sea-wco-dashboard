@@ -79,10 +79,9 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchWalletData = async (page: number = 1, isLoadMore: boolean = false) => {
+  const fetchWalletData = async (isLoadMore: boolean = false) => {
     try {
       if (isLoadMore) {
         setLoadingMore(true);
@@ -90,51 +89,63 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         setLoading(true);
         setError(null);
         setWallets([]);
-        setCurrentPage(1);
         setHasMore(true);
       }
       
-      const itemsPerPage = 100;
-      const offset = (page - 1) * itemsPerPage;
+      let allWallets: WalletData[] = isLoadMore ? wallets : [];
+      let nextPageParams: string | null = null;
+      let fetchCount = 0;
+      const maxPages = 100; // Safety limit to prevent infinite loops
       
-      const response = await fetch(
-        `https://scan.w-chain.com/api/v2/addresses?items_count=${itemsPerPage}&offset=${offset}`
-      );
+      do {
+        const url = nextPageParams 
+          ? `https://scan.w-chain.com/api/v2/addresses?items_count=50&${nextPageParams}`
+          : 'https://scan.w-chain.com/api/v2/addresses?items_count=50';
+          
+        const response = await fetch(url);
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-      const result = await response.json();
-      
-      if (!result || !result.items || !Array.isArray(result.items)) {
-        throw new Error('Invalid data format from W-Chain API');
-      }
-
-      const processedWallets: WalletData[] = result.items.map((account: any) => {
-        // Convert coin_balance from wei to WCO (divide by 1e18)
-        const balanceWei = parseFloat(account.coin_balance) || 0;
-        const balance = balanceWei / 1e18;
-        const { category, emoji } = categorizeWallet(balance, account.hash);
+        const result = await response.json();
         
-        return {
-          address: account.hash,
-          balance,
-          category,
-          emoji,
-          txCount: parseInt(account.tx_count) || 0,
-        };
-      });
+        if (!result || !result.items || !Array.isArray(result.items)) {
+          throw new Error('Invalid data format from W-Chain API');
+        }
 
-      if (isLoadMore) {
-        setWallets(prev => [...prev, ...processedWallets]);
-      } else {
-        setWallets(processedWallets);
-      }
+        const processedWallets: WalletData[] = result.items.map((account: any) => {
+          // Convert coin_balance from wei to WCO (divide by 1e18)
+          const balanceWei = parseFloat(account.coin_balance) || 0;
+          const balance = balanceWei / 1e18;
+          const { category, emoji } = categorizeWallet(balance, account.hash);
+          
+          return {
+            address: account.hash,
+            balance,
+            category,
+            emoji,
+            txCount: parseInt(account.tx_count) || 0,
+          };
+        });
 
-      // Check if we have more data
-      setHasMore(processedWallets.length === itemsPerPage);
-      setCurrentPage(page);
+        allWallets = [...allWallets, ...processedWallets];
+        
+        // Update UI with current batch for progressive loading
+        setWallets([...allWallets]);
+        
+        // Check for next page params
+        nextPageParams = result.next_page_params || null;
+        fetchCount++;
+        
+        // Add small delay between requests to avoid overwhelming the API
+        if (nextPageParams && fetchCount < maxPages) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+      } while (nextPageParams && fetchCount < maxPages);
+
+      setHasMore(false);
       
     } catch (err) {
       console.error('Error fetching wallet data:', err);
@@ -146,9 +157,8 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   };
 
   const loadMore = async () => {
-    if (!loadingMore && hasMore) {
-      await fetchWalletData(currentPage + 1, true);
-    }
+    // No longer needed as all data is fetched automatically
+    // Kept for backward compatibility but does nothing
   };
 
   useEffect(() => {
@@ -160,7 +170,7 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
     loading, 
     loadingMore,
     error, 
-    refetch: () => fetchWalletData(1, false),
+    refetch: () => fetchWalletData(false),
     loadMore,
     hasMore,
     totalFetched: wallets.length,
