@@ -62,8 +62,9 @@ const FLAGSHIP_WALLETS: Record<string, string> = {
 };
 
 const EXCHANGE_WALLETS: Record<string, string> = {
-  // Add known exchange addresses here
-  // Example: "0x1234...": "Binance Hot Wallet",
+  "0x6cc8dcbca746a6e4fdefb98e1d0df903b107fd21": "Bitrue Exchange",
+  "0x2802e182d5a15df915fd0363d8f1adfd2049f9ee": "MEXC Exchange", 
+  "0x430d2ada8140378989d20eae6d48ea05bbce2977": "Bitmart Exchange",
 };
 
 const WRAPPED_WCO = [
