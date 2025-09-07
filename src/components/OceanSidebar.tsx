@@ -7,7 +7,8 @@ import {
   Waves, 
   Info, 
   Heart,
-  TrendingUp
+  TrendingUp,
+  BarChart3
 } from "lucide-react";
 import {
   Sidebar,
@@ -23,6 +24,7 @@ import wcoLogo from "@/assets/wco-logo.png";
 
 const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Trading Chart", url: "/trading", icon: BarChart3 },
   { title: "Ocean Creatures", url: "/creatures", icon: Fish },
   { title: "Portfolio", url: "/portfolio", icon: PieChart },
   { title: "Tokens", url: "/tokens", icon: Coins },
