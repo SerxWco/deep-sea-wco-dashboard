@@ -57,7 +57,7 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
       setError(null);
       
       const response = await fetch(
-        'https://scan.w-chain.com/api/accounts?limit=100&sort=balance'
+        'https://scan.w-chain.com/api/addresses?limit=100&sort=balance'
       );
 
       if (!response.ok) {
@@ -71,7 +71,9 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
       }
 
       const processedWallets: WalletData[] = result.map((account: any) => {
-        const balance = parseFloat(account.balance) || 0;
+        // Convert balance from wei to WCO (divide by 1e18)
+        const balanceWei = parseFloat(account.balance) || 0;
+        const balance = balanceWei / 1e18;
         const { category, emoji } = categorizeWallet(balance, account.address);
         
         return {
