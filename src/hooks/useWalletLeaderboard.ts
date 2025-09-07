@@ -98,10 +98,28 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
       const maxPages = 100; // Safety limit to prevent infinite loops
       
       do {
-        const url = nextPageParams 
-          ? `https://scan.w-chain.com/api/v2/addresses?items_count=50&${nextPageParams}`
-          : 'https://scan.w-chain.com/api/v2/addresses?items_count=50';
-          
+        let url = 'https://scan.w-chain.com/api/v2/addresses?items_count=50';
+        
+        // Handle next_page_params properly
+        if (nextPageParams) {
+          if (typeof nextPageParams === 'string') {
+            url += `&${nextPageParams}`;
+          } else if (typeof nextPageParams === 'object' && nextPageParams !== null) {
+            // Convert object to URLSearchParams
+            const params = new URLSearchParams();
+            Object.entries(nextPageParams).forEach(([key, value]) => {
+              if (value !== null && value !== undefined) {
+                params.append(key, String(value));
+              }
+            });
+            const paramString = params.toString();
+            if (paramString) {
+              url += `&${paramString}`;
+            }
+          }
+        }
+        
+        console.log(`Fetching page ${fetchCount + 1}, URL:`, url);
         const response = await fetch(url);
 
         if (!response.ok) {
@@ -125,18 +143,37 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
             balance,
             category,
             emoji,
-            txCount: parseInt(account.tx_count) || 0,
+            txCount: parseInt(account.transaction_count || account.tx_count) || 0,
           };
         });
 
-        allWallets = [...allWallets, ...processedWallets];
+        // Prevent duplicate wallets
+        const newWallets = processedWallets.filter(
+          wallet => !allWallets.some(existing => existing.address === wallet.address)
+        );
+
+        if (newWallets.length === 0 && processedWallets.length > 0) {
+          console.log('Detected duplicate page, stopping pagination');
+          break;
+        }
+
+        allWallets = [...allWallets, ...newWallets];
         
         // Update UI with current batch for progressive loading
         setWallets([...allWallets]);
         
         // Check for next page params
+        const prevNextPageParams = nextPageParams;
         nextPageParams = result.next_page_params || null;
+        
+        // Safety check: if next_page_params hasn't changed, break to avoid infinite loop
+        if (nextPageParams && JSON.stringify(nextPageParams) === JSON.stringify(prevNextPageParams)) {
+          console.log('Next page params unchanged, stopping pagination');
+          break;
+        }
+        
         fetchCount++;
+        console.log(`Fetched page ${fetchCount}, total wallets: ${allWallets.length}, has more: ${!!nextPageParams}`);
         
         // Add small delay between requests to avoid overwhelming the API
         if (nextPageParams && fetchCount < maxPages) {
