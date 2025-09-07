@@ -2,95 +2,132 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Ocean-inspired crypto dashboard design system. All colors MUST be HSL. */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Ocean gradient background */
+    --background: 210 67% 14%; /* Atlantic Blue base */
+    --foreground: 210 20% 98%; /* Crisp white text */
+    
+    /* Deep sea navy to aqua gradient */
+    --gradient-ocean: linear-gradient(135deg, hsl(210, 70%, 8%) 0%, hsl(210, 67%, 14%) 50%, hsl(192, 75%, 45%) 100%);
+    --gradient-depth: linear-gradient(180deg, hsl(210, 70%, 8%) 0%, hsl(210, 67%, 14%) 100%);
+    
+    /* Glassmorphism cards */
+    --card-ocean: 215 25% 15%; /* Semi-transparent navy */
+    --card-glow: 192 75% 45%; /* Aqua glow */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* Ocean-themed card system */
+    --card: 215 25% 15%; /* Semi-transparent navy */
+    --card-foreground: 210 20% 98%; /* White text */
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 215 25% 15%;
+    --popover-foreground: 210 20% 98%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Ocean primary colors - Dark teal to aqua gradient */
+    --primary: 192 75% 45%; /* Aqua accent */
+    --primary-foreground: 210 20% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary ocean tones */
+    --secondary: 215 25% 20%; /* Deeper navy */
+    --secondary-foreground: 192 50% 85%; /* Light aqua */
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Muted ocean tones */
+    --muted: 215 25% 18%;
+    --muted-foreground: 210 15% 65%; /* Light gray */
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Accent aqua highlights */
+    --accent: 192 75% 45%; /* Bright aqua */
+    --accent-foreground: 210 70% 8%; /* Deep navy */
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Destructive (red for losses) */
+    --destructive: 0 75% 55%; /* Ocean red */
+    --destructive-foreground: 210 20% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Success (green for gains) */
+    --success: 142 70% 45%; /* Ocean green */
+    --success-foreground: 210 20% 98%;
 
-    --radius: 0.5rem;
+    /* Borders and inputs */
+    --border: 215 25% 25%; /* Subtle navy border */
+    --input: 215 25% 18%;
+    --ring: 192 75% 45%; /* Aqua focus ring */
 
-    --sidebar-background: 0 0% 98%;
+    --radius: 1rem; /* More rounded for modern feel */
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Ocean sidebar system */
+    --sidebar-background: 210 70% 8%; /* Deep sea navy */
+    --sidebar-foreground: 210 20% 98%; /* White text */
+    --sidebar-primary: 192 75% 45%; /* Aqua highlights */
+    --sidebar-primary-foreground: 210 70% 8%;
+    --sidebar-accent: 215 25% 18%; /* Subtle navy accent */
+    --sidebar-accent-foreground: 192 50% 85%;
+    --sidebar-border: 215 25% 25%;
+    --sidebar-ring: 192 75% 45%;
 
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Ocean effects and animations */
+    --glow-aqua: 0 0 20px hsl(192, 75%, 45%, 0.4);
+    --glow-intense: 0 0 40px hsl(192, 75%, 45%, 0.6);
+    --shadow-ocean: 0 8px 32px hsl(210, 70%, 8%, 0.3);
+    --backdrop-blur: blur(16px);
+    --transition-smooth: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Same ocean theme for consistency */
+    --background: 210 70% 8%; /* Deeper navy for dark mode */
+    --foreground: 210 20% 98%;
+    --card: 215 25% 12%;
+    --card-foreground: 210 20% 98%;
+    --primary: 192 75% 50%; /* Slightly brighter aqua */
+    --destructive: 0 75% 50%;
+    --success: 142 70% 50%;
+  }
+}
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+@layer components {
+  /* Ocean glassmorphism utility classes */
+  .glass-ocean {
+    background: hsl(var(--card) / 0.8);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid hsl(var(--border) / 0.3);
+    box-shadow: var(--shadow-ocean);
+  }
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+  .glow-aqua {
+    box-shadow: var(--glow-aqua);
+  }
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+  .glow-intense {
+    box-shadow: var(--glow-intense);
+  }
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+  .transition-ocean {
+    transition: var(--transition-smooth);
+  }
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+  .transition-bounce {
+    transition: var(--transition-bounce);
+  }
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+  /* Ocean gradient backgrounds */
+  .bg-ocean-gradient {
+    background: var(--gradient-ocean);
+  }
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+  .bg-depth-gradient {
+    background: var(--gradient-depth);
+  }
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+  /* Interactive states */
+  .hover-lift {
+    @apply transition-ocean hover:scale-105 hover:glow-aqua;
+  }
+
+  .active-glow {
+    @apply glow-aqua border-primary/50;
   }
 }
 
