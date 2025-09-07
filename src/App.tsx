@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { TradingViewChart } from "@/components/TradingViewChart";
 import Dashboard from "./pages/Dashboard";
+import OceanCreatures from "./pages/OceanCreatures";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,10 +30,7 @@ const App = () => (
           } />
           <Route path="/creatures" element={
             <DashboardLayout>
-              <div className="p-6 text-center">
-                <h1 className="text-2xl font-bold text-foreground mb-4">Ocean Creatures</h1>
-                <p className="text-muted-foreground">Coming soon...</p>
-              </div>
+              <OceanCreatures />
             </DashboardLayout>
           } />
           <Route path="/portfolio" element={
