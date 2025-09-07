@@ -26,9 +26,9 @@ export const useWCOMarketData = (): UseWCOMarketDataReturn => {
       setLoading(true);
       setError(null);
       
-      // CoinGecko API endpoint for W-Coin (WCO)
+      // CoinGecko API endpoint for WadzCoin (WCO)
       const response = await fetch(
-        'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=w-coin&order=market_cap_desc&per_page=1&page=1&sparkline=false'
+        'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=wadzcoin&order=market_cap_desc&per_page=1&page=1&sparkline=false'
       );
 
       if (!response.ok) {
