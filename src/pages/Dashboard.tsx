@@ -1,5 +1,5 @@
 import { CryptoMetricCard } from "@/components/CryptoMetricCard";
-import { PriceChart } from "@/components/PriceChart";
+import { TradingViewWidget } from "@/components/TradingViewWidget";
 import { useWCOMarketData } from "@/hooks/useWCOMarketData";
 import { formatCurrency, formatPercentage, formatNumber } from "@/utils/formatters";
 import { 
@@ -74,7 +74,7 @@ export default function Dashboard() {
         {/* Middle Row - Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <PriceChart />
+            <TradingViewWidget height="500px" />
           </div>
           
           <CryptoMetricCard
