@@ -18,6 +18,29 @@ const ERC20_ABI = [
 
 const W_CHAIN_RPC = 'https://mainnet-rpc.w-chain.com';
 
+// Add delay function to avoid overwhelming RPC
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Retry function with exponential backoff
+const retryWithBackoff = async <T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T | null> => {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === maxRetries - 1) {
+        console.warn('Max retries reached:', error);
+        return null;
+      }
+      await delay(baseDelay * Math.pow(2, i));
+    }
+  }
+  return null;
+};
+
 export const useTokenBalances = (
   tokens: WChainToken[],
   walletAddress: string | null
@@ -39,9 +62,25 @@ export const useTokenBalances = (
       const provider = new ethers.JsonRpcProvider(W_CHAIN_RPC);
       const tokenBalances: TokenBalance[] = [];
 
-      // Batch balance calls for efficiency
-      const balancePromises = tokens.map(async (token) => {
-        try {
+      // Limit to top tokens by holders to avoid overwhelming RPC
+      const topTokens = tokens
+        .filter(token => token.type === 'ERC-20' && token.holders_count && token.holders_count > 5)
+        .sort((a, b) => (b.holders_count || 0) - (a.holders_count || 0))
+        .slice(0, 20); // Only check top 20 tokens
+
+      // Process tokens sequentially with delays to avoid overwhelming RPC
+      for (let i = 0; i < topTokens.length; i++) {
+        const token = topTokens[i];
+        
+        if (i > 0 && i % 5 === 0) {
+          // Add longer delay every 5 requests
+          await delay(2000);
+        } else if (i > 0) {
+          // Small delay between requests
+          await delay(200);
+        }
+
+        const result = await retryWithBackoff(async () => {
           const contract = new ethers.Contract(token.address, ERC20_ABI, provider);
           const balance = await contract.balanceOf(walletAddress);
           
@@ -60,16 +99,14 @@ export const useTokenBalances = (
             };
           }
           return null;
-        } catch (error) {
-          console.warn(`Failed to fetch balance for ${token.symbol}:`, error);
-          return null;
-        }
-      });
+        });
 
-      const results = await Promise.all(balancePromises);
-      const validBalances = results.filter(balance => balance !== null) as TokenBalance[];
+        if (result) {
+          tokenBalances.push(result);
+        }
+      }
       
-      setBalances(validBalances);
+      setBalances(tokenBalances);
     } catch (err) {
       console.error('Error fetching token balances:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch balances');
