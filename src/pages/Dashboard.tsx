@@ -1,6 +1,7 @@
 import { CryptoMetricCard } from "@/components/CryptoMetricCard";
 import { TradingViewWidget } from "@/components/TradingViewWidget";
 import { useWCOMarketData } from "@/hooks/useWCOMarketData";
+import { useWChainNetworkStats } from "@/hooks/useWChainNetworkStats";
 import { formatCurrency, formatPercentage, formatNumber } from "@/utils/formatters";
 import { 
   DollarSign, 
@@ -17,6 +18,7 @@ import {
 
 export default function Dashboard() {
   const { data, loading, error } = useWCOMarketData();
+  const { data: networkStats, loading: networkLoading, error: networkError } = useWChainNetworkStats();
 
   return (
     <div className="min-h-screen bg-ocean-gradient p-6">
@@ -27,12 +29,12 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold text-foreground mb-2">
               WCO Ocean Dashboard
             </h1>
-            {loading && (
+            {(loading || networkLoading) && (
               <RefreshCw className="h-5 w-5 text-accent animate-spin" />
             )}
           </div>
           <p className="text-muted-foreground">
-            {error ? "Unable to fetch live data - showing cached values" : "Live crypto analytics and ocean creature ecosystem"}
+            {(error || networkError) ? "Unable to fetch live data - showing cached values" : "Live crypto analytics and ocean creature ecosystem"}
           </p>
         </div>
 
@@ -93,29 +95,41 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <CryptoMetricCard
             title="Active Wallets"
-            value="2,847"
-            change={{ value: "+156", isPositive: true }}
+            value={networkStats ? formatNumber(networkStats.activeWallets) : networkLoading ? "Loading..." : "N/A"}
+            change={networkStats?.previousStats ? { 
+              value: formatNumber(Math.abs(networkStats.activeWallets - networkStats.previousStats.activeWallets)), 
+              isPositive: networkStats.activeWallets >= networkStats.previousStats.activeWallets 
+            } : undefined}
             icon={<Users className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
             title="Dormant Wallets"
-            value="1,203"
-            change={{ value: "-23", isPositive: true }}
+            value={networkStats ? formatNumber(networkStats.dormantWallets) : networkLoading ? "Loading..." : "N/A"}
+            change={networkStats?.previousStats ? { 
+              value: formatNumber(Math.abs(networkStats.dormantWallets - networkStats.previousStats.dormantWallets)), 
+              isPositive: networkStats.dormantWallets <= networkStats.previousStats.dormantWallets 
+            } : undefined}
             icon={<Wallet className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
             title="Large Transactions"
-            value="47"
-            change={{ value: "+12", isPositive: true }}
+            value={networkStats ? networkStats.largeTransactions.toString() : networkLoading ? "Loading..." : "N/A"}
+            change={networkStats?.previousStats ? { 
+              value: Math.abs(networkStats.largeTransactions - networkStats.previousStats.largeTransactions).toString(), 
+              isPositive: networkStats.largeTransactions >= networkStats.previousStats.largeTransactions 
+            } : undefined}
             icon={<ArrowUpDown className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
             title="Activity Rate"
-            value="73.2%"
-            change={{ value: "+5.8%", isPositive: true }}
+            value={networkStats ? `${networkStats.activityRate}%` : networkLoading ? "Loading..." : "N/A"}
+            change={networkStats?.previousStats ? { 
+              value: `${Math.abs(networkStats.activityRate - networkStats.previousStats.activityRate).toFixed(1)}%`, 
+              isPositive: networkStats.activityRate >= networkStats.previousStats.activityRate 
+            } : undefined}
             icon={<Zap className="h-5 w-5" />}
           />
         </div>
