@@ -1,6 +1,10 @@
 import { useWalletConnection } from '@/hooks/useWalletConnection';
+import { useWChainTokens } from '@/hooks/useWChainTokens';
+import { useTokenBalances } from '@/hooks/useTokenBalances';
 import { WalletConnectButton } from '@/components/WalletConnectButton';
 import { WalletInfo } from '@/components/WalletInfo';
+import { TokenHoldings } from '@/components/TokenHoldings';
+import { PortfolioSummary } from '@/components/PortfolioSummary';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 
@@ -13,6 +17,25 @@ const Portfolio = () => {
     disconnectWallet, 
     error 
   } = useWalletConnection();
+
+  const {
+    tokens,
+    loading: tokensLoading,
+    error: tokensError,
+    refreshTokens
+  } = useWChainTokens();
+
+  const {
+    balances,
+    loading: balancesLoading,
+    error: balancesError,
+    refetchBalances
+  } = useTokenBalances(tokens, walletInfo?.address || null);
+
+  const handleRefreshPortfolio = () => {
+    refreshTokens();
+    refetchBalances();
+  };
 
   return (
     <div className="min-h-screen p-6">
@@ -28,10 +51,12 @@ const Portfolio = () => {
         </div>
 
         {/* Error Display */}
-        {error && (
+        {(error || tokensError || balancesError) && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>
+              {error || tokensError || balancesError}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -59,12 +84,27 @@ const Portfolio = () => {
               </div>
             </div>
           ) : (
-            /* Connected Wallet Info */
+            /* Connected Portfolio */
             walletInfo && (
-              <div className="w-full max-w-2xl">
+              <div className="w-full space-y-6">
+                {/* Portfolio Summary */}
+                <PortfolioSummary
+                  balances={balances}
+                  walletAddress={walletInfo.address}
+                  onRefresh={handleRefreshPortfolio}
+                  loading={tokensLoading || balancesLoading}
+                />
+
+                {/* Wallet Info */}
                 <WalletInfo 
                   walletInfo={walletInfo}
                   onDisconnect={disconnectWallet}
+                />
+
+                {/* Token Holdings */}
+                <TokenHoldings
+                  balances={balances}
+                  loading={balancesLoading}
                 />
               </div>
             )
