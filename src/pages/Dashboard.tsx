@@ -10,9 +10,9 @@ import {
   Target, 
   Activity,
   Users,
-  Wallet,
-  ArrowUpDown,
-  Zap,
+  UserCheck,
+  ArrowUpRight,
+  Coins,
   RefreshCw
 } from "lucide-react";
 
@@ -91,46 +91,72 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Bottom Row - Detailed Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Network Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
           <CryptoMetricCard
-            title="Active Wallets"
-            value={networkStats ? formatNumber(networkStats.activeWallets) : networkLoading ? "Loading..." : "N/A"}
-            change={networkStats?.previousStats ? { 
-              value: formatNumber(Math.abs(networkStats.activeWallets - networkStats.previousStats.activeWallets)), 
-              isPositive: networkStats.activeWallets >= networkStats.previousStats.activeWallets 
+            title="Total WCO Holders"
+            value={networkStats ? formatNumber(networkStats.totalHolders) : networkLoading ? "..." : "N/A"}
+            change={networkStats?.previousStats ? {
+              value: formatNumber(
+                Math.abs(networkStats.totalHolders - networkStats.previousStats.totalHolders)
+              ),
+              isPositive: networkStats.totalHolders >= networkStats.previousStats.totalHolders
             } : undefined}
             icon={<Users className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
-            title="Dormant Wallets"
-            value={networkStats ? formatNumber(networkStats.dormantWallets) : networkLoading ? "Loading..." : "N/A"}
-            change={networkStats?.previousStats ? { 
-              value: formatNumber(Math.abs(networkStats.dormantWallets - networkStats.previousStats.dormantWallets)), 
-              isPositive: networkStats.dormantWallets <= networkStats.previousStats.dormantWallets 
+            title="24h Transactions"
+            value={networkStats ? formatNumber(networkStats.transactions24h) : networkLoading ? "..." : "N/A"}
+            change={networkStats?.previousStats ? {
+              value: formatNumber(
+                Math.abs(networkStats.transactions24h - networkStats.previousStats.transactions24h)
+              ),
+              isPositive: networkStats.transactions24h >= networkStats.previousStats.transactions24h
             } : undefined}
-            icon={<Wallet className="h-5 w-5" />}
+            icon={<ArrowUpRight className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
-            title="Large Transactions"
-            value={networkStats ? networkStats.largeTransactions.toString() : networkLoading ? "Loading..." : "N/A"}
-            change={networkStats?.previousStats ? { 
-              value: Math.abs(networkStats.largeTransactions - networkStats.previousStats.largeTransactions).toString(), 
-              isPositive: networkStats.largeTransactions >= networkStats.previousStats.largeTransactions 
+            title="24h WCO Moved"
+            value={networkStats ? `${formatNumber(networkStats.wcoMoved24h)} WCO` : networkLoading ? "..." : "N/A"}
+            change={networkStats?.previousStats ? {
+              value: `${formatNumber(Math.abs(networkStats.wcoMoved24h - networkStats.previousStats.wcoMoved24h))} WCO`,
+              isPositive: networkStats.wcoMoved24h >= networkStats.previousStats.wcoMoved24h
             } : undefined}
-            icon={<ArrowUpDown className="h-5 w-5" />}
+            icon={<Coins className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
-            title="Activity Rate"
-            value={networkStats ? `${networkStats.activityRate}%` : networkLoading ? "Loading..." : "N/A"}
-            change={networkStats?.previousStats ? { 
-              value: `${Math.abs(networkStats.activityRate - networkStats.previousStats.activityRate).toFixed(1)}%`, 
-              isPositive: networkStats.activityRate >= networkStats.previousStats.activityRate 
+            title="Active Wallets"
+            value={networkStats ? formatNumber(networkStats.activeWallets) : networkLoading ? "..." : "N/A"}
+            change={networkStats?.previousStats ? {
+              value: formatNumber(
+                Math.abs(networkStats.activeWallets - networkStats.previousStats.activeWallets)
+              ),
+              isPositive: networkStats.activeWallets >= networkStats.previousStats.activeWallets
             } : undefined}
-            icon={<Zap className="h-5 w-5" />}
+            icon={<UserCheck className="h-5 w-5" />}
+          />
+          
+          <CryptoMetricCard
+            title="Avg Transaction Size"
+            value={networkStats ? `${networkStats.averageTransactionSize} WCO` : networkLoading ? "..." : "N/A"}
+            change={networkStats?.previousStats ? {
+              value: `${Math.abs((networkStats.averageTransactionSize - networkStats.previousStats.averageTransactionSize)).toFixed(2)} WCO`,
+              isPositive: networkStats.averageTransactionSize >= networkStats.previousStats.averageTransactionSize
+            } : undefined}
+            icon={<BarChart3 className="h-5 w-5" />}
+          />
+          
+          <CryptoMetricCard
+            title="Network Activity Rate"
+            value={networkStats ? `${networkStats.networkActivityRate}%` : networkLoading ? "..." : "N/A"}
+            change={networkStats?.previousStats ? {
+              value: `${Math.abs(networkStats.networkActivityRate - networkStats.previousStats.networkActivityRate).toFixed(1)}%`,
+              isPositive: networkStats.networkActivityRate >= networkStats.previousStats.networkActivityRate
+            } : undefined}
+            icon={<Activity className="h-5 w-5" />}
           />
         </div>
       </div>
