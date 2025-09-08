@@ -2,6 +2,7 @@ import { CryptoMetricCard } from "@/components/CryptoMetricCard";
 import { TradingViewWidget } from "@/components/TradingViewWidget";
 import { useWCOMarketData } from "@/hooks/useWCOMarketData";
 import { useWChainNetworkStats } from "@/hooks/useWChainNetworkStats";
+import { useWalletLeaderboard } from "@/hooks/useWalletLeaderboard";
 import { formatCurrency, formatPercentage, formatNumber } from "@/utils/formatters";
 import { 
   DollarSign, 
@@ -19,6 +20,7 @@ import {
 export default function Dashboard() {
   const { data, loading, error } = useWCOMarketData();
   const { data: networkStats, loading: networkLoading, error: networkError } = useWChainNetworkStats();
+  const { totalFetched: totalHolders, loading: holdersLoading } = useWalletLeaderboard();
 
   return (
     <div className="min-h-screen bg-ocean-gradient p-6">
@@ -95,13 +97,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
           <CryptoMetricCard
             title="Total WCO Holders"
-            value={networkStats ? formatNumber(networkStats.totalHolders) : networkLoading ? "..." : "N/A"}
-            change={networkStats?.previousStats ? {
-              value: formatNumber(
-                Math.abs(networkStats.totalHolders - networkStats.previousStats.totalHolders)
-              ),
-              isPositive: networkStats.totalHolders >= networkStats.previousStats.totalHolders
-            } : undefined}
+            value={holdersLoading ? "..." : formatNumber(totalHolders)}
             icon={<Users className="h-5 w-5" />}
           />
           
