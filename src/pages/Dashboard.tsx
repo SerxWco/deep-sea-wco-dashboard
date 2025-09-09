@@ -20,8 +20,8 @@ import {
 
 export default function Dashboard() {
   const { data, loading, error } = useWCOMarketData();
-  const { data: networkStats, loading: networkLoading, error: networkError } = useWChainNetworkStats();
   const { totalFetched: totalHolders, loading: holdersLoading } = useWalletLeaderboard();
+  const { data: networkStats, loading: networkLoading, error: networkError } = useWChainNetworkStats(totalHolders);
 
   return (
     <div className="min-h-screen bg-ocean-gradient p-6">

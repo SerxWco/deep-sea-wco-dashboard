@@ -59,7 +59,7 @@ const ACTIVE_WALLET_THRESHOLD = 7 * 24 * 60 * 60 * 1000; // 7 days in millisecon
 // Minimum balance to be considered a holder (in Wei)
 const MIN_HOLDER_BALANCE = 1000000000000000000; // 1 WCO in Wei
 
-export const useWChainNetworkStats = (): UseWChainNetworkStatsReturn => {
+export const useWChainNetworkStats = (totalTrackedWallets: number = 0): UseWChainNetworkStatsReturn => {
   const [data, setData] = useState<WChainNetworkStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,8 +87,8 @@ export const useWChainNetworkStats = (): UseWChainNetworkStatsReturn => {
       console.log('Address data sample:', addresses.slice(0, 3));
       console.log('Total addresses fetched:', addresses.length);
 
-      // Fetch recent transactions for 24h analysis
-      const transactionsResponse = await fetch(`${W_CHAIN_API_BASE}/transactions?limit=200`);
+      // Fetch recent transactions for 24h analysis (increased limit for better accuracy)
+      const transactionsResponse = await fetch(`${W_CHAIN_API_BASE}/transactions?limit=1000`);
       if (!transactionsResponse.ok) {
         throw new Error(`Transactions API error: ${transactionsResponse.status}`);
       }
@@ -136,35 +136,31 @@ export const useWChainNetworkStats = (): UseWChainNetworkStatsReturn => {
         ? estimatedWcoMoved24h / actualTransactions24h 
         : 0;
 
-      // Count active wallets (transacted in last 7 days)
-      let activeWallets = 0;
-      let validLastSeenCount = 0;
+      // Calculate active wallets using transaction-based approach (like old project)
+      const activeWalletsSet = new Set<string>();
       
-      addresses.forEach(address => {
-        if (address.last_seen) {
-          validLastSeenCount++;
-          const lastSeenTime = new Date(address.last_seen).getTime();
-          if (!isNaN(lastSeenTime) && now - lastSeenTime < ACTIVE_WALLET_THRESHOLD) {
-            activeWallets++;
-          }
+      transactions.forEach(tx => {
+        const txTime = new Date(tx.timestamp).getTime();
+        if (txTime >= twentyFourHoursAgo) {
+          // Add both sender and receiver as active wallets
+          activeWalletsSet.add(tx.from.hash.toLowerCase());
+          activeWalletsSet.add(tx.to.hash.toLowerCase());
         }
       });
 
-      console.log('Valid last_seen addresses:', validLastSeenCount);
-      console.log('Active wallets (sample):', activeWallets);
-      
-      const estimatedActiveWallets = Math.round(activeWallets * scalingFactor);
+      const activeWallets = activeWalletsSet.size;
+      console.log('Active wallets (24h transactions):', activeWallets);
 
-      // Calculate network activity rate
-      const networkActivityRate = totalAddresses > 0 
-        ? Math.min(100, (estimatedActiveWallets / totalAddresses) * 100)
+      // Calculate network activity rate against tracked wallets (like old project)
+      const networkActivityRate = totalTrackedWallets > 0 
+        ? Math.min(100, (activeWallets / totalTrackedWallets) * 100)
         : 0;
 
       const newStats = {
         totalHolders: estimatedTotalHolders,
         transactions24h: actualTransactions24h,
         wcoMoved24h: Math.round(estimatedWcoMoved24h),
-        activeWallets: estimatedActiveWallets,
+        activeWallets: activeWallets,
         averageTransactionSize: Math.round(averageTransactionSize * 100) / 100,
         networkActivityRate: Math.round(networkActivityRate * 10) / 10,
       };
