@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { saveDailyMetrics, getDailyComparison } from '@/utils/dailyComparisons';
 
 interface NetworkStats {
   totalTransactionsCount: string;
@@ -34,14 +35,14 @@ interface WChainNetworkStats {
   activeWallets: number;
   averageTransactionSize: number;
   networkActivityRate: number;
-  previousStats?: {
-    totalHolders: number;
-    transactions24h: number;
-    wcoMoved24h: number;
-    activeWallets: number;
-    averageTransactionSize: number;
-    networkActivityRate: number;
-  };
+  dailyComparison?: {
+    totalHolders: { change: number; percentage: number };
+    transactions24h: { change: number; percentage: number };
+    wcoMoved24h: { change: number; percentage: number };
+    activeWallets: { change: number; percentage: number };
+    averageTransactionSize: { change: number; percentage: number };
+    networkActivityRate: { change: number; percentage: number };
+  } | null;
 }
 
 interface UseWChainNetworkStatsReturn {
@@ -76,12 +77,15 @@ export const useWChainNetworkStats = (): UseWChainNetworkStatsReturn => {
       const networkStats: NetworkStats = await statsResponse.json();
 
       // Fetch addresses to count holders (increase limit for better accuracy)
-      const addressesResponse = await fetch(`${W_CHAIN_API_BASE}/addresses?limit=500`);
+      const addressesResponse = await fetch(`${W_CHAIN_API_BASE}/addresses?limit=1000`);
       if (!addressesResponse.ok) {
         throw new Error(`Addresses API error: ${addressesResponse.status}`);
       }
       const addressesData = await addressesResponse.json();
       const addresses: AddressData[] = addressesData.items || [];
+      
+      console.log('Address data sample:', addresses.slice(0, 3));
+      console.log('Total addresses fetched:', addresses.length);
 
       // Fetch recent transactions for 24h analysis
       const transactionsResponse = await fetch(`${W_CHAIN_API_BASE}/transactions?limit=200`);
@@ -134,15 +138,21 @@ export const useWChainNetworkStats = (): UseWChainNetworkStatsReturn => {
 
       // Count active wallets (transacted in last 7 days)
       let activeWallets = 0;
+      let validLastSeenCount = 0;
+      
       addresses.forEach(address => {
         if (address.last_seen) {
+          validLastSeenCount++;
           const lastSeenTime = new Date(address.last_seen).getTime();
-          if (now - lastSeenTime < ACTIVE_WALLET_THRESHOLD) {
+          if (!isNaN(lastSeenTime) && now - lastSeenTime < ACTIVE_WALLET_THRESHOLD) {
             activeWallets++;
           }
         }
       });
 
+      console.log('Valid last_seen addresses:', validLastSeenCount);
+      console.log('Active wallets (sample):', activeWallets);
+      
       const estimatedActiveWallets = Math.round(activeWallets * scalingFactor);
 
       // Calculate network activity rate
@@ -150,24 +160,27 @@ export const useWChainNetworkStats = (): UseWChainNetworkStatsReturn => {
         ? Math.min(100, (estimatedActiveWallets / totalAddresses) * 100)
         : 0;
 
-      // Store previous stats for change calculation
-      const previousStats = data ? {
-        totalHolders: data.totalHolders,
-        transactions24h: data.transactions24h,
-        wcoMoved24h: data.wcoMoved24h,
-        activeWallets: data.activeWallets,
-        averageTransactionSize: data.averageTransactionSize,
-        networkActivityRate: data.networkActivityRate,
-      } : undefined;
-
-      setData({
+      const newStats = {
         totalHolders: estimatedTotalHolders,
         transactions24h: actualTransactions24h,
         wcoMoved24h: Math.round(estimatedWcoMoved24h),
         activeWallets: estimatedActiveWallets,
-        averageTransactionSize: Math.round(averageTransactionSize * 100) / 100, // Round to 2 decimals
-        networkActivityRate: Math.round(networkActivityRate * 10) / 10, // Round to 1 decimal
-        previousStats,
+        averageTransactionSize: Math.round(averageTransactionSize * 100) / 100,
+        networkActivityRate: Math.round(networkActivityRate * 10) / 10,
+      };
+
+      // Save daily metrics for comparison
+      saveDailyMetrics(newStats);
+      
+      // Get daily comparison
+      const dailyComparison = getDailyComparison(newStats);
+
+      console.log('Final stats:', newStats);
+      console.log('Daily comparison:', dailyComparison);
+
+      setData({
+        ...newStats,
+        dailyComparison,
       });
 
     } catch (err) {

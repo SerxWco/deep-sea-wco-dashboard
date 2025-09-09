@@ -4,6 +4,7 @@ import { useWCOMarketData } from "@/hooks/useWCOMarketData";
 import { useWChainNetworkStats } from "@/hooks/useWChainNetworkStats";
 import { useWalletLeaderboard } from "@/hooks/useWalletLeaderboard";
 import { formatCurrency, formatPercentage, formatNumber } from "@/utils/formatters";
+import { formatDailyChange } from "@/utils/dailyComparisons";
 import { 
   DollarSign, 
   TrendingUp, 
@@ -104,54 +105,40 @@ export default function Dashboard() {
           <CryptoMetricCard
             title="24h Transactions"
             value={networkStats ? formatNumber(networkStats.transactions24h) : networkLoading ? "..." : "N/A"}
-            change={networkStats?.previousStats ? {
-              value: formatNumber(
-                Math.abs(networkStats.transactions24h - networkStats.previousStats.transactions24h)
-              ),
-              isPositive: networkStats.transactions24h >= networkStats.previousStats.transactions24h
-            } : undefined}
+            change={networkStats?.dailyComparison ? 
+              formatDailyChange(networkStats.dailyComparison.transactions24h.change) : undefined}
             icon={<ArrowUpRight className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
             title="24h WCO Moved"
             value={networkStats ? `${formatNumber(networkStats.wcoMoved24h)} WCO` : networkLoading ? "..." : "N/A"}
-            change={networkStats?.previousStats ? {
-              value: `${formatNumber(Math.abs(networkStats.wcoMoved24h - networkStats.previousStats.wcoMoved24h))} WCO`,
-              isPositive: networkStats.wcoMoved24h >= networkStats.previousStats.wcoMoved24h
-            } : undefined}
+            change={networkStats?.dailyComparison ? 
+              formatDailyChange(networkStats.dailyComparison.wcoMoved24h.change) : undefined}
             icon={<Coins className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
             title="Active Wallets"
             value={networkStats ? formatNumber(networkStats.activeWallets) : networkLoading ? "..." : "N/A"}
-            change={networkStats?.previousStats ? {
-              value: formatNumber(
-                Math.abs(networkStats.activeWallets - networkStats.previousStats.activeWallets)
-              ),
-              isPositive: networkStats.activeWallets >= networkStats.previousStats.activeWallets
-            } : undefined}
+            change={networkStats?.dailyComparison ? 
+              formatDailyChange(networkStats.dailyComparison.activeWallets.change) : undefined}
             icon={<UserCheck className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
             title="Avg Transaction Size"
             value={networkStats ? `${networkStats.averageTransactionSize} WCO` : networkLoading ? "..." : "N/A"}
-            change={networkStats?.previousStats ? {
-              value: `${Math.abs((networkStats.averageTransactionSize - networkStats.previousStats.averageTransactionSize)).toFixed(2)} WCO`,
-              isPositive: networkStats.averageTransactionSize >= networkStats.previousStats.averageTransactionSize
-            } : undefined}
+            change={networkStats?.dailyComparison ? 
+              formatDailyChange(networkStats.dailyComparison.averageTransactionSize.change) : undefined}
             icon={<BarChart3 className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
             title="Network Activity Rate"
             value={networkStats ? `${networkStats.networkActivityRate}%` : networkLoading ? "..." : "N/A"}
-            change={networkStats?.previousStats ? {
-              value: `${Math.abs(networkStats.networkActivityRate - networkStats.previousStats.networkActivityRate).toFixed(1)}%`,
-              isPositive: networkStats.networkActivityRate >= networkStats.previousStats.networkActivityRate
-            } : undefined}
+            change={networkStats?.dailyComparison ? 
+              formatDailyChange(networkStats.dailyComparison.networkActivityRate.change, true) : undefined}
             icon={<Activity className="h-5 w-5" />}
           />
         </div>
