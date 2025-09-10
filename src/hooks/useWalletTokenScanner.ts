@@ -120,7 +120,7 @@ export const useWalletTokenScanner = (
           balance: balance.toString(),
           formattedBalance,
           balanceInEth,
-          usdValue: undefined
+          usdValue: token.exchange_rate ? balanceInEth * parseFloat(token.exchange_rate) : undefined
         };
       }
     } catch (error) {
@@ -183,7 +183,7 @@ export const useWalletTokenScanner = (
               balance: balance.toString(),
               formattedBalance,
               balanceInEth,
-              usdValue: undefined
+              usdValue: token.exchange_rate ? balanceInEth * parseFloat(token.exchange_rate) : undefined
             };
           }
           return null;
@@ -242,7 +242,7 @@ export const useWalletTokenScanner = (
             balance: wcoBalance.toString(),
             formattedBalance: ethers.formatEther(wcoBalance),
             balanceInEth: parseFloat(ethers.formatEther(wcoBalance)),
-            usdValue: undefined
+            usdValue: wcoToken.exchange_rate ? parseFloat(ethers.formatEther(wcoBalance)) * parseFloat(wcoToken.exchange_rate) : undefined
           });
         }
       } catch (error) {

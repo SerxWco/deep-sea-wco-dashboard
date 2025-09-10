@@ -129,12 +129,15 @@ export const useTokenBalances = (
 
             console.log(`✅ Found balance for ${token.symbol}: ${formattedBalance}`);
 
+            const exchangeRate = token.exchange_rate ? parseFloat(token.exchange_rate) : null;
+            const usdValue = exchangeRate ? balanceInEth * exchangeRate : undefined;
+
             return {
               token,
               balance: balance.toString(),
               formattedBalance,
               balanceInEth,
-              usdValue: undefined // TODO: Add price data integration
+              usdValue
             };
           }
           return null;

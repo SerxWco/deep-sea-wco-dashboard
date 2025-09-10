@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Wallet, TrendingUp, DollarSign } from 'lucide-react';
+import { formatCurrency } from '@/utils/formatters';
 
 interface PortfolioSummaryProps {
   balances: TokenBalance[];
@@ -23,6 +24,7 @@ export const PortfolioSummary = ({
 
   const totalTokens = balances.length;
   const totalHoldings = balances.reduce((sum, balance) => sum + balance.balanceInEth, 0);
+  const totalUsdValue = balances.reduce((sum, balance) => sum + (balance.usdValue || 0), 0);
 
   // Find top holding by balance
   const topHolding = balances.reduce((max, balance) => 
@@ -80,7 +82,7 @@ export const PortfolioSummary = ({
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Portfolio</CardTitle>
+          <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
           <Button
             variant="ghost"
             size="sm"
@@ -92,9 +94,11 @@ export const PortfolioSummary = ({
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-primary">Active</div>
+          <div className="text-2xl font-bold text-primary">
+            {totalUsdValue > 0 ? formatCurrency(totalUsdValue) : 'N/A'}
+          </div>
           <p className="text-xs text-muted-foreground">
-            Live on W Chain
+            {totalUsdValue > 0 ? 'Total USD Value' : 'Prices loading...'}
           </p>
         </CardContent>
       </Card>
