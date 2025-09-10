@@ -18,6 +18,35 @@ const ERC20_ABI = [
 
 const W_CHAIN_RPC = 'https://mainnet-rpc.w-chain.com';
 
+// Alternative RPC endpoints to try
+const BACKUP_RPCS = [
+  'https://rpc.w-chain.com',
+  'https://mainnet.w-chain.com',
+  'https://rpc-mainnet.w-chain.com',
+  'https://node.w-chain.com',
+];
+
+// Function to find working RPC
+const findWorkingRPC = async (): Promise<string | null> => {
+  const allEndpoints = [W_CHAIN_RPC, ...BACKUP_RPCS];
+  
+  for (const rpcUrl of allEndpoints) {
+    try {
+      console.log(`Testing RPC endpoint: ${rpcUrl}`);
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      await provider.getBlockNumber();
+      console.log(`✅ Working RPC found: ${rpcUrl}`);
+      return rpcUrl;
+    } catch (error) {
+      console.log(`❌ RPC failed: ${rpcUrl}`, error);
+      continue;
+    }
+  }
+  
+  console.error('No working RPC endpoints found');
+  return null;
+};
+
 // Add delay function to avoid overwhelming RPC
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -59,7 +88,13 @@ export const useTokenBalances = (
       setLoading(true);
       setError(null);
 
-      const provider = new ethers.JsonRpcProvider(W_CHAIN_RPC);
+      // Find a working RPC endpoint
+      const workingRPC = await findWorkingRPC();
+      if (!workingRPC) {
+        throw new Error('No working W-Chain RPC endpoints available. Please try again later.');
+      }
+
+      const provider = new ethers.JsonRpcProvider(workingRPC);
       const tokenBalances: TokenBalance[] = [];
 
       // Limit to top tokens by holders to avoid overwhelming RPC
@@ -67,6 +102,8 @@ export const useTokenBalances = (
         .filter(token => token.type === 'ERC-20' && token.holders_count && token.holders_count > 5)
         .sort((a, b) => (b.holders_count || 0) - (a.holders_count || 0))
         .slice(0, 20); // Only check top 20 tokens
+
+      console.log(`Checking balances for ${topTokens.length} tokens using RPC: ${workingRPC}`);
 
       // Process tokens sequentially with delays to avoid overwhelming RPC
       for (let i = 0; i < topTokens.length; i++) {
@@ -90,6 +127,8 @@ export const useTokenBalances = (
             const formattedBalance = ethers.formatUnits(balance, decimals);
             const balanceInEth = parseFloat(formattedBalance);
 
+            console.log(`✅ Found balance for ${token.symbol}: ${formattedBalance}`);
+
             return {
               token,
               balance: balance.toString(),
@@ -106,6 +145,7 @@ export const useTokenBalances = (
         }
       }
       
+      console.log(`Total tokens with balances found: ${tokenBalances.length}`);
       setBalances(tokenBalances);
     } catch (err) {
       console.error('Error fetching token balances:', err);

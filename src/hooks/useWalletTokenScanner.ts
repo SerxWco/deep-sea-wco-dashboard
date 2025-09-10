@@ -20,6 +20,35 @@ const ERC20_ABI = [
 
 const W_CHAIN_RPC = 'https://mainnet-rpc.w-chain.com';
 
+// Alternative RPC endpoints to try
+const BACKUP_RPCS = [
+  'https://rpc.w-chain.com',
+  'https://mainnet.w-chain.com', 
+  'https://rpc-mainnet.w-chain.com',
+  'https://node.w-chain.com',
+];
+
+// Function to find working RPC
+const findWorkingRPC = async (): Promise<string | null> => {
+  const allEndpoints = [W_CHAIN_RPC, ...BACKUP_RPCS];
+  
+  for (const rpcUrl of allEndpoints) {
+    try {
+      console.log(`Testing RPC endpoint: ${rpcUrl}`);
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      await provider.getBlockNumber();
+      console.log(`✅ Working RPC found: ${rpcUrl}`);
+      return rpcUrl;
+    } catch (error) {
+      console.log(`❌ RPC failed: ${rpcUrl}`, error);
+      continue;
+    }
+  }
+  
+  console.error('No working RPC endpoints found');
+  return null;
+};
+
 // Common token addresses to check (including known tokens like OG88)
 const COMMON_TOKENS = [
   '0x81d29c0DcD64fAC05C4A394D455cbD79D210C200', // Example - add more known token addresses
@@ -110,14 +139,24 @@ export const useWalletTokenScanner = (
       setLoading(true);
       setError(null);
 
-      const provider = new ethers.JsonRpcProvider(W_CHAIN_RPC);
+      // Find a working RPC endpoint
+      const workingRPC = await findWorkingRPC();
+      if (!workingRPC) {
+        throw new Error('No working W-Chain RPC endpoints available. Please try again later.');
+      }
+
+      const provider = new ethers.JsonRpcProvider(workingRPC);
       const tokenBalances: TokenBalance[] = [];
+
+      console.log(`Scanning wallet with RPC: ${workingRPC}`);
 
       // 1. Check known W-Chain tokens first
       const topKnownTokens = knownTokens
         .filter(token => token.type === 'ERC-20')
         .sort((a, b) => (b.holders_count || 0) - (a.holders_count || 0))
         .slice(0, 50); // Check top 50 known tokens
+
+      console.log(`Checking ${topKnownTokens.length} known tokens...`);
 
       for (let i = 0; i < topKnownTokens.length; i++) {
         const token = topKnownTokens[i];
@@ -136,6 +175,8 @@ export const useWalletTokenScanner = (
             const decimals = parseInt(token.decimals) || 18;
             const formattedBalance = ethers.formatUnits(balance, decimals);
             const balanceInEth = parseFloat(formattedBalance);
+
+            console.log(`✅ Found balance for ${token.symbol}: ${formattedBalance}`);
 
             return {
               token,
@@ -156,6 +197,8 @@ export const useWalletTokenScanner = (
       // 2. Check common tokens that might not be in W-Chain API
       const unknownTokenAddresses = [...COMMON_TOKENS, ...customTokens];
       
+      console.log(`Checking ${unknownTokenAddresses.length} custom/common tokens...`);
+      
       for (let i = 0; i < unknownTokenAddresses.length; i++) {
         const address = unknownTokenAddresses[i];
         
@@ -173,6 +216,7 @@ export const useWalletTokenScanner = (
         );
 
         if (result) {
+          console.log(`✅ Found custom token balance: ${result.token.symbol}`);
           tokenBalances.push(result);
         }
       }
@@ -191,6 +235,8 @@ export const useWalletTokenScanner = (
             icon_url: undefined
           };
 
+          console.log(`✅ Found WCO balance: ${ethers.formatEther(wcoBalance)}`);
+
           tokenBalances.unshift({
             token: wcoToken,
             balance: wcoBalance.toString(),
@@ -206,6 +252,7 @@ export const useWalletTokenScanner = (
       // Sort by balance value (highest first)
       tokenBalances.sort((a, b) => b.balanceInEth - a.balanceInEth);
       
+      console.log(`Total tokens found: ${tokenBalances.length}`);
       setAllBalances(tokenBalances);
     } catch (err) {
       console.error('Error scanning wallet:', err);
@@ -233,7 +280,12 @@ export const useWalletTokenScanner = (
       }
 
       // Test if it's a valid ERC-20 contract
-      const provider = new ethers.JsonRpcProvider(W_CHAIN_RPC);
+      const workingRPC = await findWorkingRPC();
+      if (!workingRPC) {
+        throw new Error('No working W-Chain RPC endpoints available');
+      }
+      
+      const provider = new ethers.JsonRpcProvider(workingRPC);
       const result = await scanTokenContract(provider, contractAddress, walletAddress);
       
       if (result) {
