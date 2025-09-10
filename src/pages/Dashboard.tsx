@@ -95,7 +95,7 @@ export default function Dashboard() {
         </div>
 
         {/* Network Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <CryptoMetricCard
             title="Total WCO Holders"
             value={holdersLoading ? "..." : formatNumber(totalHolders)}
@@ -119,27 +119,11 @@ export default function Dashboard() {
           />
           
           <CryptoMetricCard
-            title="Active Wallets"
-            value={networkStats ? formatNumber(networkStats.activeWallets) : networkLoading ? "..." : "N/A"}
-            change={networkStats?.dailyComparison ? 
-              formatDailyChange(networkStats.dailyComparison.activeWallets.change) : undefined}
-            icon={<UserCheck className="h-5 w-5" />}
-          />
-          
-          <CryptoMetricCard
             title="Avg Transaction Size"
             value={networkStats ? `${networkStats.averageTransactionSize} WCO` : networkLoading ? "..." : "N/A"}
             change={networkStats?.dailyComparison ? 
               formatDailyChange(networkStats.dailyComparison.averageTransactionSize.change) : undefined}
             icon={<BarChart3 className="h-5 w-5" />}
-          />
-          
-          <CryptoMetricCard
-            title="Network Activity Rate"
-            value={networkStats ? `${networkStats.networkActivityRate}%` : networkLoading ? "..." : "N/A"}
-            change={networkStats?.dailyComparison ? 
-              formatDailyChange(networkStats.dailyComparison.networkActivityRate.change, true) : undefined}
-            icon={<Activity className="h-5 w-5" />}
           />
         </div>
       </div>
