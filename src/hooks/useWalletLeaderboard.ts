@@ -59,6 +59,7 @@ const FLAGSHIP_WALLETS: Record<string, string> = {
   "0x57ab15ca8bd528d509dbc81d11e9beca44f3445f": "Development Fund",
   "0xba9be06936c806aefad981ae96fa4d599b78ad24": "WTK Conversion / Total Supply",
   "0x67f2696c125d8d1307a5ae17348a440718229d03": "Treasury Wallet",
+  "0x81d29c0DcD64fAC05C4A394D455cbD79D210C200": "Buybacks",
 };
 
 const EXCHANGE_WALLETS: Record<string, string> = {
