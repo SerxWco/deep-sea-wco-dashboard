@@ -1,11 +1,14 @@
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { useWChainTokens } from '@/hooks/useWChainTokens';
 import { useTokenBalances } from '@/hooks/useTokenBalances';
+import { useWalletTokenScanner } from '@/hooks/useWalletTokenScanner';
 import { WalletConnectButton } from '@/components/WalletConnectButton';
 import { WalletInfo } from '@/components/WalletInfo';
 import { TokenHoldings } from '@/components/TokenHoldings';
+import { AddCustomTokenForm } from '@/components/AddCustomTokenForm';
 import { PortfolioSummary } from '@/components/PortfolioSummary';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle } from 'lucide-react';
 
 const Portfolio = () => {
@@ -32,9 +35,19 @@ const Portfolio = () => {
     refetchBalances
   } = useTokenBalances(tokens, walletInfo?.address || null);
 
+  // New comprehensive wallet scanner
+  const {
+    allBalances,
+    loading: scannerLoading,
+    error: scannerError,
+    scanWallet,
+    addCustomToken
+  } = useWalletTokenScanner(walletInfo?.address || null, tokens);
+
   const handleRefreshPortfolio = () => {
     refreshTokens();
     refetchBalances();
+    scanWallet();
   };
 
   return (
@@ -51,11 +64,11 @@ const Portfolio = () => {
         </div>
 
         {/* Error Display */}
-        {(error || tokensError || balancesError) && (
+        {(error || tokensError || balancesError || scannerError) && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              {error || tokensError || balancesError}
+              {error || tokensError || balancesError || scannerError}
             </AlertDescription>
           </Alert>
         )}
@@ -89,10 +102,10 @@ const Portfolio = () => {
               <div className="w-full space-y-6">
                 {/* Portfolio Summary */}
                 <PortfolioSummary
-                  balances={balances}
+                  balances={allBalances}
                   walletAddress={walletInfo.address}
                   onRefresh={handleRefreshPortfolio}
-                  loading={tokensLoading || balancesLoading}
+                  loading={tokensLoading || balancesLoading || scannerLoading}
                 />
 
                 {/* Wallet Info */}
@@ -101,11 +114,35 @@ const Portfolio = () => {
                   onDisconnect={disconnectWallet}
                 />
 
-                {/* Token Holdings */}
-                <TokenHoldings
-                  balances={balances}
-                  loading={balancesLoading}
-                />
+                {/* Token Holdings with Tabs */}
+                <Tabs defaultValue="all" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="all">All Tokens</TabsTrigger>
+                    <TabsTrigger value="verified">W-Chain Tokens</TabsTrigger>
+                    <TabsTrigger value="add">Add Token</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="all" className="mt-6">
+                    <TokenHoldings
+                      balances={allBalances}
+                      loading={scannerLoading}
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="verified" className="mt-6">
+                    <TokenHoldings
+                      balances={balances}
+                      loading={balancesLoading}
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="add" className="mt-6">
+                    <AddCustomTokenForm
+                      onAddToken={addCustomToken}
+                      loading={scannerLoading}
+                    />
+                  </TabsContent>
+                </Tabs>
               </div>
             )
           )}
