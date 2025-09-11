@@ -6,8 +6,7 @@ import {
   Coins, 
   Waves, 
   Info, 
-  Heart,
-  TrendingUp
+  Heart
 } from "lucide-react";
 import {
   Sidebar,
@@ -43,18 +42,13 @@ export function OceanSidebar() {
             <img 
               src={wcoLogo} 
               alt="WCO Ocean Hub" 
-              className="h-16 w-16 rounded-xl glow-intense hover:scale-110 transition-bounce"
+              className="h-16 w-auto glow-intense hover:scale-110 transition-bounce"
             />
-            <div className="absolute -inset-1 bg-gradient-to-r from-accent/20 to-accent/40 rounded-xl blur opacity-75"></div>
           </div>
           {!collapsed && (
-            <div className="space-y-1">
-              <h1 className="text-2xl font-bold text-foreground tracking-tight">WCO</h1>
-              <p className="text-sm text-accent font-medium">Ocean Hub</p>
-              <div className="flex items-center gap-1 text-xs text-success">
-                <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
-                <span>Live</span>
-              </div>
+            <div className="flex items-center gap-1 text-xs text-success ml-2">
+              <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+              <span>Live</span>
             </div>
           )}
         </div>
@@ -89,16 +83,6 @@ export function OceanSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {!collapsed && (
-          <div className="mt-8 p-4 glass-ocean rounded-lg mx-3">
-            <div className="flex items-center gap-2 text-accent mb-2">
-              <TrendingUp className="h-4 w-4" />
-              <span className="text-sm font-medium">WCO Price</span>
-            </div>
-            <p className="text-xl font-bold text-foreground">$0.0847</p>
-            <p className="text-xs text-success">+12.5% (24h)</p>
-          </div>
-        )}
       </SidebarContent>
     </Sidebar>
   );
