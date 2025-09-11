@@ -39,41 +39,49 @@ export const useWCOBurnTracker = () => {
         }
       }
 
-      console.log('Fetching burn transactions...');
+      console.log('Fetching burn address balance...');
       
-      // Fetch transactions to burn address
-      const response = await fetch(
+      // Fetch burn address balance directly
+      const balanceResponse = await fetch(
+        `https://scan.w-chain.com/api/v2/addresses/${BURN_ADDRESS}`
+      );
+
+      if (!balanceResponse.ok) {
+        throw new Error(`Failed to fetch burn address balance: ${balanceResponse.status}`);
+      }
+
+      const balanceResult = await balanceResponse.json();
+      const totalBurnt = parseFloat(balanceResult.coin_balance || '0') / 1e18; // Convert from Wei to WCO
+
+      // Fetch recent transactions to burn address for 24h tracking
+      console.log('Fetching recent burn transactions...');
+      const txResponse = await fetch(
         `https://scan.w-chain.com/api/v2/addresses/${BURN_ADDRESS}/transactions?filter=to`
       );
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch burn data: ${response.status}`);
-      }
-
-      const result = await response.json();
-      const transactions = result.items || [];
-
-      // Calculate total burnt and 24h burnt
-      const now = Date.now();
-      const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
-      const fortyEightHoursAgo = now - (48 * 60 * 60 * 1000);
-
-      let totalBurnt = 0;
       let burnt24h = 0;
       let burnt24h48h = 0; // Previous 24h for comparison
 
-      transactions.forEach((tx: BurnTransaction) => {
-        const value = parseFloat(tx.value) / 1e18; // Convert from Wei to WCO
-        const txTime = new Date(tx.timestamp).getTime();
-        
-        totalBurnt += value;
-        
-        if (txTime >= twentyFourHoursAgo) {
-          burnt24h += value;
-        } else if (txTime >= fortyEightHoursAgo) {
-          burnt24h48h += value;
-        }
-      });
+      if (txResponse.ok) {
+        const txResult = await txResponse.json();
+        const transactions = txResult.items || [];
+
+        // Calculate 24h burnt and previous 24h for comparison
+        const now = Date.now();
+        const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+        const fortyEightHoursAgo = now - (48 * 60 * 60 * 1000);
+
+        transactions.forEach((tx: BurnTransaction) => {
+          const value = parseFloat(tx.value) / 1e18; // Convert from Wei to WCO
+          const txTime = new Date(tx.timestamp).getTime();
+          
+          if (txTime >= twentyFourHoursAgo) {
+            burnt24h += value;
+          } else if (txTime >= fortyEightHoursAgo) {
+            burnt24h48h += value;
+          }
+        });
+      }
 
       // Calculate 24h change percentage
       const change24h = burnt24h48h > 0 
@@ -94,7 +102,7 @@ export const useWCOBurnTracker = () => {
       }));
 
       setData(burnData);
-      console.log(`Burn data updated: ${totalBurnt.toFixed(0)} WCO total, ${burnt24h.toFixed(0)} WCO in 24h`);
+      console.log(`Burn data updated: ${totalBurnt.toFixed(4)} WCO total, ${burnt24h.toFixed(4)} WCO in 24h`);
       
     } catch (err) {
       console.error('Error fetching burn data:', err);
