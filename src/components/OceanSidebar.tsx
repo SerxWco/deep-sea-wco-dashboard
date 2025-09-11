@@ -36,21 +36,13 @@ export function OceanSidebar() {
 
   return (
     <Sidebar className="border-r border-sidebar-border bg-depth-gradient">
-      <div className="p-6 border-b border-sidebar-border/30 bg-sidebar-accent/20">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <img 
-              src={wcoLogo} 
-              alt="WCO Ocean Hub" 
-              className="h-16 w-auto glow-intense hover:scale-110 transition-bounce"
-            />
-          </div>
-          {!collapsed && (
-            <div className="flex items-center gap-1 text-xs text-success ml-2">
-              <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
-              <span>Live</span>
-            </div>
-          )}
+      <div className="p-4 border-b border-sidebar-border/30 bg-sidebar-accent/20">
+        <div className="flex items-center justify-center">
+          <img 
+            src={wcoLogo} 
+            alt="WCO" 
+            className="h-12 w-auto hover:scale-105 transition-bounce"
+          />
         </div>
       </div>
 
