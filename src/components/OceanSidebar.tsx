@@ -36,12 +36,19 @@ export function OceanSidebar() {
 
   return (
     <Sidebar className="border-r border-sidebar-border bg-depth-gradient">
-      <div className="p-3 border-b border-sidebar-border/30 bg-sidebar-accent/20">
-        <div className="flex items-center justify-center">
+      <div className="relative p-3 border-b border-sidebar-border/30 bg-sidebar-accent/20 overflow-hidden">
+        {/* Animated waves background */}
+        <div className="absolute inset-0 opacity-30">
+          <div className="wave-1 absolute top-1/2 left-0 w-full h-8 bg-gradient-to-r from-accent/40 via-primary/60 to-accent/40 rounded-full animate-wave-1"></div>
+          <div className="wave-2 absolute top-1/2 left-0 w-full h-6 bg-gradient-to-r from-primary/30 via-accent/50 to-primary/30 rounded-full animate-wave-2"></div>
+          <div className="wave-3 absolute top-1/2 left-0 w-full h-4 bg-gradient-to-r from-accent/20 via-primary/40 to-accent/20 rounded-full animate-wave-3"></div>
+        </div>
+        
+        <div className="relative z-10 flex items-center justify-center">
           <img 
             src="/lovable-uploads/383feda4-dfad-4b67-a364-3b2faa79a14b.png" 
             alt="WCO Ocean" 
-            className="h-20 w-20 hover:scale-105 transition-bounce filter brightness-110"
+            className="h-20 w-20 hover:scale-105 transition-bounce filter brightness-110 drop-shadow-lg"
           />
         </div>
       </div>

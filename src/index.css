@@ -129,6 +129,49 @@
   .active-glow {
     @apply glow-aqua border-primary/50;
   }
+
+  /* Wave animations for logo background */
+  .animate-wave-1 {
+    animation: wave1 4s ease-in-out infinite;
+    transform: translateY(-50%);
+  }
+
+  .animate-wave-2 {
+    animation: wave2 5s ease-in-out infinite;
+    transform: translateY(-50%);
+  }
+
+  .animate-wave-3 {
+    animation: wave3 6s ease-in-out infinite;
+    transform: translateY(-50%);
+  }
+
+  @keyframes wave1 {
+    0%, 100% {
+      transform: translateY(-50%) translateX(-10px) scaleX(0.8);
+    }
+    50% {
+      transform: translateY(-50%) translateX(10px) scaleX(1.2);
+    }
+  }
+
+  @keyframes wave2 {
+    0%, 100% {
+      transform: translateY(-50%) translateX(10px) scaleX(1.1);
+    }
+    50% {
+      transform: translateY(-50%) translateX(-15px) scaleX(0.9);
+    }
+  }
+
+  @keyframes wave3 {
+    0%, 100% {
+      transform: translateY(-50%) translateX(5px) scaleX(1.0);
+    }
+    50% {
+      transform: translateY(-50%) translateX(-5px) scaleX(1.3);
+    }
+  }
 }
 
 @layer base {
