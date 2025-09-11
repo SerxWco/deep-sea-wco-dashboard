@@ -39,9 +39,9 @@ export function OceanSidebar() {
       <div className="p-4 border-b border-sidebar-border/30 bg-sidebar-accent/20">
         <div className="flex items-center justify-center">
           <img 
-            src={wcoLogo} 
-            alt="WCO" 
-            className="h-12 w-auto hover:scale-105 transition-bounce"
+            src="/lovable-uploads/383feda4-dfad-4b67-a364-3b2faa79a14b.png" 
+            alt="WCO Ocean" 
+            className="h-16 w-16 hover:scale-105 transition-bounce filter brightness-110"
           />
         </div>
       </div>
