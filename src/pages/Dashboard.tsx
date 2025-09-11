@@ -3,6 +3,7 @@ import { TradingViewWidget } from "@/components/TradingViewWidget";
 import { useWCOMarketData } from "@/hooks/useWCOMarketData";
 import { useWChainNetworkStats } from "@/hooks/useWChainNetworkStats";
 import { useWalletLeaderboard } from "@/hooks/useWalletLeaderboard";
+import { useWCOBurnTracker } from "@/hooks/useWCOBurnTracker";
 import { formatCurrency, formatPercentage, formatNumber } from "@/utils/formatters";
 import { formatDailyChange } from "@/utils/dailyComparisons";
 import { 
@@ -15,13 +16,15 @@ import {
   UserCheck,
   ArrowUpRight,
   Coins,
-  RefreshCw
+  RefreshCw,
+  Flame
 } from "lucide-react";
 
 export default function Dashboard() {
   const { data, loading, error } = useWCOMarketData();
   const { totalFetched: totalHolders, loading: holdersLoading } = useWalletLeaderboard();
   const { data: networkStats, loading: networkLoading, error: networkError } = useWChainNetworkStats(totalHolders);
+  const { data: burnData, loading: burnLoading, error: burnError } = useWCOBurnTracker();
 
   return (
     <div className="min-h-screen bg-ocean-gradient p-6">
@@ -32,12 +35,12 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold text-foreground mb-2">
               WCO Ocean Dashboard
             </h1>
-            {(loading || networkLoading) && (
+            {(loading || networkLoading || burnLoading) && (
               <RefreshCw className="h-5 w-5 text-accent animate-spin" />
             )}
           </div>
           <p className="text-muted-foreground">
-            {(error || networkError) ? "Unable to fetch live data - showing cached values" : "Live crypto analytics and ocean creature ecosystem"}
+            {(error || networkError || burnError) ? "Unable to fetch live data - showing cached values" : "Live crypto analytics and ocean creature ecosystem"}
           </p>
         </div>
 
@@ -95,7 +98,7 @@ export default function Dashboard() {
         </div>
 
         {/* Network Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           <CryptoMetricCard
             title="Total WCO Holders"
             value={holdersLoading ? "..." : formatNumber(totalHolders)}
@@ -108,6 +111,16 @@ export default function Dashboard() {
             change={networkStats?.dailyComparison ? 
               formatDailyChange(networkStats.dailyComparison.transactions24h.change) : undefined}
             icon={<ArrowUpRight className="h-5 w-5" />}
+          />
+          
+          <CryptoMetricCard
+            title="WCO Burnt"
+            value={burnData ? `${formatNumber(burnData.totalBurnt)} WCO` : burnLoading ? "..." : "N/A"}
+            change={burnData && burnData.change24h !== 0 ? {
+              value: `${formatNumber(burnData.burnt24h)} WCO in 24h`,
+              isPositive: burnData.change24h > 0
+            } : undefined}
+            icon={<Flame className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
