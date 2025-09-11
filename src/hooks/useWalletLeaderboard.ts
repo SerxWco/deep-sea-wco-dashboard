@@ -111,6 +111,36 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
 
+  // Function to fetch a specific wallet by address
+  const fetchSpecificWallet = async (address: string): Promise<WalletData | null> => {
+    try {
+      const response = await fetch(`https://scan.w-chain.com/api/v2/addresses/${address}`);
+      if (!response.ok) {
+        console.warn(`Failed to fetch wallet ${address}: ${response.status}`);
+        return null;
+      }
+
+      const account = await response.json();
+      if (!account) return null;
+
+      const balanceWei = parseFloat(account.coin_balance) || 0;
+      const balance = balanceWei / 1e18;
+      const { category, emoji, label } = categorizeWallet(balance, account.hash);
+      
+      return {
+        address: account.hash,
+        balance,
+        category,
+        emoji,
+        txCount: parseInt(account.transaction_count || account.tx_count) || 0,
+        label,
+      };
+    } catch (error) {
+      console.warn(`Error fetching specific wallet ${address}:`, error);
+      return null;
+    }
+  };
+
   const fetchWalletData = async (isLoadMore: boolean = false) => {
     try {
       if (isLoadMore) {
@@ -177,6 +207,33 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         if (keepFetching) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
+      }
+
+      // Verify all flagship wallets are present
+      console.log('Verifying flagship wallets...');
+      const flagshipAddresses = Object.keys(FLAGSHIP_WALLETS);
+      const foundFlagships = allWallets.filter(w => flagshipAddresses.includes(w.address.toLowerCase()));
+      const missingFlagships = flagshipAddresses.filter(addr => 
+        !foundFlagships.some(w => w.address.toLowerCase() === addr.toLowerCase())
+      );
+
+      console.log(`Found ${foundFlagships.length}/${flagshipAddresses.length} flagship wallets`);
+      
+      if (missingFlagships.length > 0) {
+        console.log('Fetching missing flagship wallets:', missingFlagships);
+        
+        for (const address of missingFlagships) {
+          const wallet = await fetchSpecificWallet(address);
+          if (wallet) {
+            allWallets.push(wallet);
+            console.log(`✅ Added missing flagship wallet: ${wallet.label || address}`);
+          }
+          // Small delay between requests
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+        // Update UI with flagship wallets added
+        setWallets([...allWallets]);
       }
 
       setHasMore(false);
