@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Copy, ExternalLink } from 'lucide-react';
 import { formatNumber } from '@/utils/formatters';
 import { toast } from 'sonner';
+import { useWCOMarketData } from '@/hooks/useWCOMarketData';
 
 interface TokenHoldingsProps {
   balances: TokenBalance[];
@@ -14,6 +15,8 @@ interface TokenHoldingsProps {
 }
 
 export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
+  const { data: wcoMarketData } = useWCOMarketData();
+
   const copyAddress = (address: string) => {
     navigator.clipboard.writeText(address);
     toast.success('Contract address copied to clipboard');
@@ -25,6 +28,24 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const getTokenPrice = (token: any) => {
+    // Check if this is WCO token
+    const isWCO = token.symbol?.toUpperCase() === 'WCO' || 
+                  token.name?.toLowerCase().includes('w coin') ||
+                  token.name?.toLowerCase().includes('wadzcoin');
+    
+    if (isWCO && wcoMarketData?.current_price) {
+      return `$${wcoMarketData.current_price.toFixed(6)}`;
+    }
+    
+    // For other tokens, use exchange_rate if available
+    if (token.exchange_rate) {
+      return `$${parseFloat(token.exchange_rate).toFixed(6)}`;
+    }
+    
+    return '--';
   };
 
   if (loading) {
@@ -126,8 +147,8 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
 
                   <TableCell>
                     <div className="text-sm font-medium">
-                      {token.exchange_rate 
-                        ? `$${parseFloat(token.exchange_rate).toFixed(6)}`
+                      {getTokenPrice(token) !== '--' 
+                        ? getTokenPrice(token)
                         : <span className="text-muted-foreground">--</span>
                       }
                     </div>
