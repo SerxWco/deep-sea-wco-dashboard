@@ -85,7 +85,7 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
               <TableRow>
                 <TableHead>Token</TableHead>
                 <TableHead>Contract</TableHead>
-                <TableHead>Type</TableHead>
+                <TableHead>Price</TableHead>
                 <TableHead className="text-right">Balance</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
@@ -125,9 +125,12 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
                   </TableCell>
 
                   <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {token.type}
-                    </Badge>
+                    <div className="text-sm font-medium">
+                      {token.exchange_rate 
+                        ? `$${parseFloat(token.exchange_rate).toFixed(6)}`
+                        : <span className="text-muted-foreground">--</span>
+                      }
+                    </div>
                   </TableCell>
 
                   <TableCell className="text-right font-medium">
