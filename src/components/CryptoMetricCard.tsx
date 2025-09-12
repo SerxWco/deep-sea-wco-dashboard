@@ -11,6 +11,7 @@ interface CryptoMetricCardProps {
   };
   icon?: React.ReactNode;
   className?: string;
+  chart?: React.ReactNode;
 }
 
 export function CryptoMetricCard({ 
@@ -18,7 +19,8 @@ export function CryptoMetricCard({
   value, 
   change, 
   icon, 
-  className 
+  className,
+  chart 
 }: CryptoMetricCardProps) {
   return (
     <Card className={cn(
@@ -40,6 +42,12 @@ export function CryptoMetricCard({
         <p className="text-2xl font-bold text-foreground">
           {value}
         </p>
+        
+        {chart && (
+          <div className="mt-2 mb-2">
+            {chart}
+          </div>
+        )}
         
         {change && (
           <div className={cn(

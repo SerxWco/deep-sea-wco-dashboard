@@ -1,9 +1,11 @@
 import { CryptoMetricCard } from "@/components/CryptoMetricCard";
+import { MiniChart } from "@/components/MiniChart";
 import { TradingViewWidget } from "@/components/TradingViewWidget";
 import { useWCOMarketData } from "@/hooks/useWCOMarketData";
 import { useWChainNetworkStats } from "@/hooks/useWChainNetworkStats";
 import { useWalletLeaderboard } from "@/hooks/useWalletLeaderboard";
 import { useWCOBurnTracker } from "@/hooks/useWCOBurnTracker";
+import { useMetricHistory } from "@/hooks/useMetricHistory";
 import { formatCurrency, formatPercentage, formatNumber } from "@/utils/formatters";
 import { formatDailyChange } from "@/utils/dailyComparisons";
 import { 
@@ -25,6 +27,13 @@ export default function Dashboard() {
   const { totalFetched: totalHolders, loading: holdersLoading } = useWalletLeaderboard();
   const { data: networkStats, loading: networkLoading, error: networkError } = useWChainNetworkStats(totalHolders);
   const { data: burnData, loading: burnLoading, error: burnError } = useWCOBurnTracker();
+  
+  // Generate trend data for charts
+  const history = useMetricHistory(
+    totalHolders,
+    networkStats?.transactions24h,
+    burnData?.totalBurnt
+  );
 
   return (
     <div className="min-h-screen bg-ocean-gradient p-6">
@@ -103,6 +112,13 @@ export default function Dashboard() {
             title="Total WCO Holders"
             value={holdersLoading ? "..." : formatNumber(totalHolders)}
             icon={<Users className="h-5 w-5" />}
+            chart={!holdersLoading && history.holders.length > 0 && (
+              <MiniChart 
+                data={history.holders} 
+                color="hsl(var(--primary))" 
+                height={35}
+              />
+            )}
           />
           
           <CryptoMetricCard
@@ -111,6 +127,13 @@ export default function Dashboard() {
             change={networkStats?.dailyComparison ? 
               formatDailyChange(networkStats.dailyComparison.transactions24h.change) : undefined}
             icon={<ArrowUpRight className="h-5 w-5" />}
+            chart={!networkLoading && history.transactions.length > 0 && (
+              <MiniChart 
+                data={history.transactions} 
+                color="hsl(var(--accent))" 
+                height={35}
+              />
+            )}
           />
           
           <CryptoMetricCard
@@ -121,6 +144,13 @@ export default function Dashboard() {
               isPositive: burnData.change24h > 0
             } : undefined}
             icon={<Flame className="h-5 w-5" />}
+            chart={!burnLoading && history.burnt.length > 0 && (
+              <MiniChart 
+                data={history.burnt} 
+                color="hsl(var(--destructive))" 
+                height={35}
+              />
+            )}
           />
           
           <CryptoMetricCard
