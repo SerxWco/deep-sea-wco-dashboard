@@ -25,6 +25,7 @@ const navigationItems = [
   { title: "Ocean Creatures", url: "/creatures", icon: Fish },
   { title: "Portfolio", url: "/portfolio", icon: PieChart },
   { title: "Tokens", url: "/tokens", icon: Coins },
+  { title: "WAVE", url: "/wave", icon: Waves },
   { title: "Whale Tracker", url: "/whales", icon: Waves },
   { title: "WCO Info", url: "/info", icon: Info },
   { title: "Support Project", url: "/support", icon: Heart },

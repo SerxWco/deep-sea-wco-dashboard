@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import OceanCreatures from "./pages/OceanCreatures";
 import Portfolio from "./pages/Portfolio";
 import Tokens from "./pages/Tokens";
+import Wave from "./pages/Wave";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,11 @@ const App = () => (
           <Route path="/tokens" element={
             <DashboardLayout>
               <Tokens />
+            </DashboardLayout>
+          } />
+          <Route path="/wave" element={
+            <DashboardLayout>
+              <Wave />
             </DashboardLayout>
           } />
           <Route path="/whales" element={
