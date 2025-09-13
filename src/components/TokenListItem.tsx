@@ -5,6 +5,7 @@ import { ExternalLink, Copy } from 'lucide-react';
 import { WChainToken, TokenBalance } from '@/types/token';
 import { formatNumber } from '@/utils/formatters';
 import { useToast } from '@/hooks/use-toast';
+import { useWCOMarketData } from '@/hooks/useWCOMarketData';
 
 interface TokenListItemProps {
   token: WChainToken;
@@ -14,6 +15,7 @@ interface TokenListItemProps {
 
 export const TokenListItem = ({ token, balance, hasWallet }: TokenListItemProps) => {
   const { toast } = useToast();
+  const { data: wcoMarketData } = useWCOMarketData();
 
   const copyAddress = () => {
     navigator.clipboard.writeText(token.address);
@@ -29,6 +31,24 @@ export const TokenListItem = ({ token, balance, hasWallet }: TokenListItemProps)
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const getTokenPrice = (token: WChainToken) => {
+    // Check if this is WCO token
+    const isWCO = token.symbol?.toUpperCase() === 'WCO' || 
+                  token.name?.toLowerCase().includes('w coin') ||
+                  token.name?.toLowerCase().includes('wadzcoin');
+    
+    if (isWCO && wcoMarketData?.current_price) {
+      return `$${wcoMarketData.current_price.toFixed(6)}`;
+    }
+    
+    // For other tokens, use exchange_rate if available
+    if (token.exchange_rate) {
+      return `$${parseFloat(token.exchange_rate).toFixed(6)}`;
+    }
+    
+    return '--';
   };
 
   return (
@@ -76,11 +96,14 @@ export const TokenListItem = ({ token, balance, hasWallet }: TokenListItemProps)
         </div>
       </TableCell>
 
-      {/* Type */}
+      {/* Price */}
       <TableCell>
-        <Badge variant="secondary" className="text-xs">
-          {token.type}
-        </Badge>
+        <div className="text-sm font-medium">
+          {getTokenPrice(token) !== '--' 
+            ? getTokenPrice(token)
+            : <span className="text-muted-foreground">--</span>
+          }
+        </div>
       </TableCell>
 
       {/* Balance */}

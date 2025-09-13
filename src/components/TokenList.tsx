@@ -88,7 +88,7 @@ export const TokenList = ({ tokens, balances, loading, hasWallet, showOnlyOwned 
               <TableRow className="border-border">
                 <TableHead className="text-muted-foreground">Token</TableHead>
                 <TableHead className="text-muted-foreground">Contract</TableHead>
-                <TableHead className="text-muted-foreground">Type</TableHead>
+                <TableHead className="text-muted-foreground">Price</TableHead>
                 <TableHead className="text-muted-foreground">
                   {hasWallet ? 'Balance' : 'Balance'}
                 </TableHead>
