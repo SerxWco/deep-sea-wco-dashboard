@@ -5,6 +5,7 @@ import { useWChainNetworkStats } from "@/hooks/useWChainNetworkStats";
 import { useWalletLeaderboard } from "@/hooks/useWalletLeaderboard";
 import { useWCOBurnTracker } from "@/hooks/useWCOBurnTracker";
 import { useWCOSupplyInfo } from "@/hooks/useWCOSupplyInfo";
+import { useWChainPriceAPI } from "@/hooks/useWChainPriceAPI";
 import { formatCurrency, formatPercentage, formatNumber } from "@/utils/formatters";
 import { formatDailyChange } from "@/utils/dailyComparisons";
 import { 
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const { data: networkStats, loading: networkLoading, error: networkError } = useWChainNetworkStats(totalHolders);
   const { data: burnData, loading: burnLoading, error: burnError } = useWCOBurnTracker();
   const { data: supplyData, loading: supplyLoading, error: supplyError } = useWCOSupplyInfo();
+  const { wcoPrice, wavePrice, loading: priceLoading, error: priceError } = useWChainPriceAPI();
 
   return (
     <div className="min-h-screen bg-ocean-gradient p-6">
@@ -37,24 +39,30 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold text-foreground mb-2">
               WCO Ocean Dashboard
             </h1>
-            {(loading || networkLoading || burnLoading || supplyLoading) && (
+            {(loading || networkLoading || burnLoading || supplyLoading || priceLoading) && (
               <RefreshCw className="h-5 w-5 text-accent animate-spin" />
             )}
           </div>
           <p className="text-muted-foreground">
-            {(error || networkError || burnError || supplyError) ? "Unable to fetch live data - showing cached values" : "Live crypto analytics and ocean creature ecosystem"}
+            {(error || networkError || burnError || supplyError || priceError) ? "Unable to fetch live data - showing cached values" : "Live crypto analytics and ocean creature ecosystem"}
           </p>
         </div>
 
         {/* Top Row - Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           <CryptoMetricCard
-            title="Current WCO Price"
-            value={data ? formatCurrency(data.current_price) : loading ? "Loading..." : "$0.0000"}
+            title="WCO Price"
+            value={wcoPrice?.price ? formatCurrency(wcoPrice.price) : (data ? formatCurrency(data.current_price) : (loading || priceLoading) ? "Loading..." : "$0.0000")}
             change={data ? { 
               value: formatPercentage(data.price_change_percentage_24h), 
               isPositive: data.price_change_percentage_24h >= 0 
             } : undefined}
+            icon={<DollarSign className="h-5 w-5" />}
+          />
+          
+          <CryptoMetricCard
+            title="WAVE Price"
+            value={wavePrice?.price ? formatCurrency(wavePrice.price) : priceLoading ? "Loading..." : "N/A"}
             icon={<DollarSign className="h-5 w-5" />}
           />
           

@@ -8,6 +8,7 @@ import { Copy, ExternalLink } from 'lucide-react';
 import { formatNumber } from '@/utils/formatters';
 import { toast } from 'sonner';
 import { useWCOMarketData } from '@/hooks/useWCOMarketData';
+import { useWChainPriceAPI } from '@/hooks/useWChainPriceAPI';
 
 interface TokenHoldingsProps {
   balances: TokenBalance[];
@@ -16,6 +17,7 @@ interface TokenHoldingsProps {
 
 export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
   const { data: wcoMarketData } = useWCOMarketData();
+  const { wcoPrice, wavePrice } = useWChainPriceAPI();
 
   const copyAddress = (address: string) => {
     navigator.clipboard.writeText(address);
@@ -36,6 +38,20 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
                   token.name?.toLowerCase().includes('w coin') ||
                   token.name?.toLowerCase().includes('wadzcoin');
     
+    // Check if this is WAVE token
+    const isWAVE = token.symbol?.toUpperCase() === 'WAVE' ||
+                   token.name?.toLowerCase().includes('wave');
+    
+    // Use W-Chain API prices first (more accurate for native tokens)
+    if (isWCO && wcoPrice?.price) {
+      return `$${wcoPrice.price.toFixed(6)}`;
+    }
+    
+    if (isWAVE && wavePrice?.price) {
+      return `$${wavePrice.price.toFixed(6)}`;
+    }
+    
+    // Fallback to CoinGecko for WCO if W-Chain API unavailable
     if (isWCO && wcoMarketData?.current_price) {
       return `$${wcoMarketData.current_price.toFixed(6)}`;
     }

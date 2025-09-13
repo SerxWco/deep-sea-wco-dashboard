@@ -6,6 +6,7 @@ import { WChainToken, TokenBalance } from '@/types/token';
 import { formatNumber } from '@/utils/formatters';
 import { useToast } from '@/hooks/use-toast';
 import { useWCOMarketData } from '@/hooks/useWCOMarketData';
+import { useWChainPriceAPI } from '@/hooks/useWChainPriceAPI';
 
 interface TokenListItemProps {
   token: WChainToken;
@@ -16,6 +17,7 @@ interface TokenListItemProps {
 export const TokenListItem = ({ token, balance, hasWallet }: TokenListItemProps) => {
   const { toast } = useToast();
   const { data: wcoMarketData } = useWCOMarketData();
+  const { wcoPrice, wavePrice } = useWChainPriceAPI();
 
   const copyAddress = () => {
     navigator.clipboard.writeText(token.address);
@@ -39,6 +41,20 @@ export const TokenListItem = ({ token, balance, hasWallet }: TokenListItemProps)
                   token.name?.toLowerCase().includes('w coin') ||
                   token.name?.toLowerCase().includes('wadzcoin');
     
+    // Check if this is WAVE token
+    const isWAVE = token.symbol?.toUpperCase() === 'WAVE' ||
+                   token.name?.toLowerCase().includes('wave');
+    
+    // Use W-Chain API prices first (more accurate for native tokens)
+    if (isWCO && wcoPrice?.price) {
+      return `$${wcoPrice.price.toFixed(6)}`;
+    }
+    
+    if (isWAVE && wavePrice?.price) {
+      return `$${wavePrice.price.toFixed(6)}`;
+    }
+    
+    // Fallback to CoinGecko for WCO if W-Chain API unavailable
     if (isWCO && wcoMarketData?.current_price) {
       return `$${wcoMarketData.current_price.toFixed(6)}`;
     }
