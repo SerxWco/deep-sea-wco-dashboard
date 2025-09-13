@@ -4,6 +4,7 @@ import { useWCOMarketData } from "@/hooks/useWCOMarketData";
 import { useWChainNetworkStats } from "@/hooks/useWChainNetworkStats";
 import { useWalletLeaderboard } from "@/hooks/useWalletLeaderboard";
 import { useWCOBurnTracker } from "@/hooks/useWCOBurnTracker";
+import { useWCOSupplyInfo } from "@/hooks/useWCOSupplyInfo";
 import { formatCurrency, formatPercentage, formatNumber } from "@/utils/formatters";
 import { formatDailyChange } from "@/utils/dailyComparisons";
 import { 
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const { totalFetched: totalHolders, loading: holdersLoading } = useWalletLeaderboard();
   const { data: networkStats, loading: networkLoading, error: networkError } = useWChainNetworkStats(totalHolders);
   const { data: burnData, loading: burnLoading, error: burnError } = useWCOBurnTracker();
+  const { data: supplyData, loading: supplyLoading, error: supplyError } = useWCOSupplyInfo();
 
   return (
     <div className="min-h-screen bg-ocean-gradient p-6">
@@ -35,12 +37,12 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold text-foreground mb-2">
               WCO Ocean Dashboard
             </h1>
-            {(loading || networkLoading || burnLoading) && (
+            {(loading || networkLoading || burnLoading || supplyLoading) && (
               <RefreshCw className="h-5 w-5 text-accent animate-spin" />
             )}
           </div>
           <p className="text-muted-foreground">
-            {(error || networkError || burnError) ? "Unable to fetch live data - showing cached values" : "Live crypto analytics and ocean creature ecosystem"}
+            {(error || networkError || burnError || supplyError) ? "Unable to fetch live data - showing cached values" : "Live crypto analytics and ocean creature ecosystem"}
           </p>
         </div>
 
@@ -103,6 +105,16 @@ export default function Dashboard() {
             title="Total WCO Holders"
             value={holdersLoading ? "..." : formatNumber(totalHolders)}
             icon={<Users className="h-5 w-5" />}
+          />
+          
+          <CryptoMetricCard
+            title="Circulating Supply"
+            value={supplyData ? `${formatNumber(parseFloat(supplyData.summary.circulating_supply_wco))} WCO` : supplyLoading ? "..." : "N/A"}
+            change={supplyData ? {
+              value: `of ${formatNumber(parseFloat(supplyData.summary.initial_supply_wco))} total`,
+              isPositive: true
+            } : undefined}
+            icon={<Coins className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
