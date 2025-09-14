@@ -198,7 +198,7 @@ export default function Dashboard() {
             title="Circulating Supply"
             value={supplyData ? `${parseFloat(supplyData.summary.circulating_supply_wco).toLocaleString()} WCO` : supplyLoading ? "..." : "N/A"}
             change={supplyData ? {
-              value: `of ${formatNumber(parseFloat(supplyData.summary.initial_supply_wco))} total`,
+              value: `of ${parseFloat(supplyData.summary.initial_supply_wco).toLocaleString()} total`,
               isPositive: true
             } : undefined}
             icon={<Coins className="h-5 w-5" />}
