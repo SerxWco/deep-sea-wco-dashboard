@@ -72,6 +72,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          og88_price: number | null
           source: string
           timestamp: string
           wave_price: number | null
@@ -80,6 +81,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          og88_price?: number | null
           source?: string
           timestamp: string
           wave_price?: number | null
@@ -88,6 +90,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          og88_price?: number | null
           source?: string
           timestamp?: string
           wave_price?: number | null

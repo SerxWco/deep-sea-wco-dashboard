@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useWChainPriceAPI } from './useWChainPriceAPI';
+import { useOG88Price } from './useOG88Price';
 import { supabase } from '@/integrations/supabase/client';
 
 interface PriceHistoryEntry {
   timestamp: number;
   wco_price: number;
   wave_price: number;
+  og88_price?: number;
   source: 'w-chain-api';
 }
 
@@ -22,7 +24,9 @@ const MAX_ENTRIES = (MAX_HISTORY_DAYS * 24 * 60) / 15; // 7 days of 15-minute in
 export const usePriceHistory = () => {
   const [wcoHistory, setWcoHistory] = useState<PriceHistoryEntry[]>([]);
   const [waveHistory, setWaveHistory] = useState<PriceHistoryEntry[]>([]);
+  const [og88History, setOG88History] = useState<PriceHistoryEntry[]>([]);
   const { wcoPrice, wavePrice } = useWChainPriceAPI();
+  const { og88Price } = useOG88Price();
 
   // Load history from Supabase and localStorage on mount
   useEffect(() => {
@@ -31,7 +35,7 @@ export const usePriceHistory = () => {
         // First try to load from Supabase
         const { data: supabaseData, error } = await supabase
           .from('price_history')
-          .select('timestamp, wco_price, wave_price, source')
+          .select('timestamp, wco_price, wave_price, og88_price, source')
           .order('timestamp', { ascending: true })
           .limit(MAX_ENTRIES);
 
@@ -40,11 +44,13 @@ export const usePriceHistory = () => {
             timestamp: new Date(entry.timestamp).getTime(),
             wco_price: parseFloat(String(entry.wco_price || '0')),
             wave_price: parseFloat(String(entry.wave_price || '0')),
+            og88_price: entry.og88_price ? parseFloat(String(entry.og88_price)) : undefined,
             source: entry.source as 'w-chain-api'
           })).filter(entry => entry.wco_price > 0 && entry.wave_price > 0);
 
           setWcoHistory(formattedData);
           setWaveHistory(formattedData);
+          setOG88History(formattedData);
           
           // Cache in localStorage for faster subsequent loads
           localStorage.setItem(STORAGE_KEY, JSON.stringify(formattedData));
@@ -66,6 +72,7 @@ export const usePriceHistory = () => {
           );
           setWcoHistory(validData);
           setWaveHistory(validData);
+          setOG88History(validData);
         } catch (error) {
           console.warn('Failed to parse price history from localStorage:', error);
           localStorage.removeItem(STORAGE_KEY);
@@ -90,6 +97,7 @@ export const usePriceHistory = () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(recentHistory));
       setWcoHistory(recentHistory);
       setWaveHistory(recentHistory);
+      setOG88History(recentHistory);
     } catch (error) {
       console.warn('Failed to save price history to localStorage:', error);
     }
@@ -104,6 +112,7 @@ export const usePriceHistory = () => {
           timestamp: new Date(entry.timestamp).toISOString(),
           wco_price: entry.wco_price,
           wave_price: entry.wave_price,
+          og88_price: entry.og88_price || null,
           source: entry.source
         });
 
@@ -123,6 +132,7 @@ export const usePriceHistory = () => {
       timestamp: Date.now(),
       wco_price: wcoPrice.price,
       wave_price: wavePrice.price,
+      og88_price: og88Price?.price,
       source: 'w-chain-api'
     };
 
@@ -134,7 +144,7 @@ export const usePriceHistory = () => {
       saveToStorage(updated);
       return updated.slice(-MAX_ENTRIES);
     });
-  }, [wcoPrice?.price, wavePrice?.price, saveToStorage, savePriceToSupabase]);
+  }, [wcoPrice?.price, wavePrice?.price, og88Price?.price, saveToStorage, savePriceToSupabase]);
 
   // Set up collection interval
   useEffect(() => {
@@ -150,9 +160,9 @@ export const usePriceHistory = () => {
   }, [collectPriceData]);
 
   // Calculate price changes
-  const getLatestChange = useCallback((token: 'wco' | 'wave'): PriceChange | null => {
-    const history = token === 'wco' ? wcoHistory : waveHistory;
-    const currentPrice = token === 'wco' ? wcoPrice?.price : wavePrice?.price;
+  const getLatestChange = useCallback((token: 'wco' | 'wave' | 'og88'): PriceChange | null => {
+    const history = token === 'wco' ? wcoHistory : token === 'wave' ? waveHistory : og88History;
+    const currentPrice = token === 'wco' ? wcoPrice?.price : token === 'wave' ? wavePrice?.price : og88Price?.price;
     
     if (!currentPrice || history.length < 2) return null;
 
@@ -161,34 +171,39 @@ export const usePriceHistory = () => {
     
     if (!latest || !previous) return null;
 
-    const priceKey = token === 'wco' ? 'wco_price' : 'wave_price';
+    const priceKey = token === 'wco' ? 'wco_price' : token === 'wave' ? 'wave_price' : 'og88_price';
     const oldPrice = previous[priceKey];
     const newPrice = latest[priceKey];
+    
+    if (!oldPrice || !newPrice) return null;
     
     const absolute = newPrice - oldPrice;
     const percentage = (absolute / oldPrice) * 100;
 
     return { absolute, percentage };
-  }, [wcoHistory, waveHistory, wcoPrice?.price, wavePrice?.price]);
+  }, [wcoHistory, waveHistory, og88History, wcoPrice?.price, wavePrice?.price, og88Price?.price]);
 
   // Get price data for charts
-  const getChartData = useCallback((token: 'wco' | 'wave') => {
-    const history = token === 'wco' ? wcoHistory : waveHistory;
-    const priceKey = token === 'wco' ? 'wco_price' : 'wave_price';
+  const getChartData = useCallback((token: 'wco' | 'wave' | 'og88') => {
+    const history = token === 'wco' ? wcoHistory : token === 'wave' ? waveHistory : og88History;
+    const priceKey = token === 'wco' ? 'wco_price' : token === 'wave' ? 'wave_price' : 'og88_price';
     
-    return history.map(entry => ({
-      timestamp: entry.timestamp,
-      price: entry[priceKey],
-      time: new Date(entry.timestamp).toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      })
-    }));
-  }, [wcoHistory, waveHistory]);
+    return history
+      .filter(entry => entry[priceKey] !== undefined)
+      .map(entry => ({
+        timestamp: entry.timestamp,
+        price: entry[priceKey]!,
+        time: new Date(entry.timestamp).toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        })
+      }));
+  }, [wcoHistory, waveHistory, og88History]);
 
   return {
     wcoHistory,
     waveHistory,
+    og88History,
     getLatestChange,
     getChartData,
     isCollecting: !!wcoPrice?.price && !!wavePrice?.price
