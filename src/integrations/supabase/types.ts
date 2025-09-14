@@ -68,6 +68,33 @@ export type Database = {
         }
         Relationships: []
       }
+      price_history: {
+        Row: {
+          created_at: string
+          id: string
+          source: string
+          timestamp: string
+          wave_price: number | null
+          wco_price: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          source?: string
+          timestamp: string
+          wave_price?: number | null
+          wco_price?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          source?: string
+          timestamp?: string
+          wave_price?: number | null
+          wco_price?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

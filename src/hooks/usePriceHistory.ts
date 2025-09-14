@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useWChainPriceAPI } from './useWChainPriceAPI';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PriceHistoryEntry {
   timestamp: number;
@@ -23,28 +24,60 @@ export const usePriceHistory = () => {
   const [waveHistory, setWaveHistory] = useState<PriceHistoryEntry[]>([]);
   const { wcoPrice, wavePrice } = useWChainPriceAPI();
 
-  // Load history from localStorage on mount
+  // Load history from Supabase and localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
+    const loadHistoryData = async () => {
       try {
-        const data: PriceHistoryEntry[] = JSON.parse(stored);
-        const validData = data.filter(entry => 
-          entry.timestamp && 
-          typeof entry.wco_price === 'number' && 
-          typeof entry.wave_price === 'number'
-        );
-        setWcoHistory(validData);
-        setWaveHistory(validData);
+        // First try to load from Supabase
+        const { data: supabaseData, error } = await supabase
+          .from('price_history')
+          .select('timestamp, wco_price, wave_price, source')
+          .order('timestamp', { ascending: true })
+          .limit(MAX_ENTRIES);
+
+        if (!error && supabaseData && supabaseData.length > 0) {
+          const formattedData: PriceHistoryEntry[] = supabaseData.map(entry => ({
+            timestamp: new Date(entry.timestamp).getTime(),
+            wco_price: parseFloat(String(entry.wco_price || '0')),
+            wave_price: parseFloat(String(entry.wave_price || '0')),
+            source: entry.source as 'w-chain-api'
+          })).filter(entry => entry.wco_price > 0 && entry.wave_price > 0);
+
+          setWcoHistory(formattedData);
+          setWaveHistory(formattedData);
+          
+          // Cache in localStorage for faster subsequent loads
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(formattedData));
+          return;
+        }
       } catch (error) {
-        console.warn('Failed to parse price history from localStorage:', error);
-        localStorage.removeItem(STORAGE_KEY);
+        console.warn('Failed to load price history from Supabase:', error);
       }
-    }
+
+      // Fallback to localStorage if Supabase fails
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        try {
+          const data: PriceHistoryEntry[] = JSON.parse(stored);
+          const validData = data.filter(entry => 
+            entry.timestamp && 
+            typeof entry.wco_price === 'number' && 
+            typeof entry.wave_price === 'number'
+          );
+          setWcoHistory(validData);
+          setWaveHistory(validData);
+        } catch (error) {
+          console.warn('Failed to parse price history from localStorage:', error);
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      }
+    };
+
+    loadHistoryData();
   }, []);
 
-  // Save to localStorage whenever history changes
-  const saveToStorage = useCallback((history: PriceHistoryEntry[]) => {
+  // Save to both Supabase and localStorage
+  const saveToStorage = useCallback(async (history: PriceHistoryEntry[]) => {
     try {
       // Keep only recent entries to prevent storage bloat
       const cutoffTime = Date.now() - (MAX_HISTORY_DAYS * 24 * 60 * 60 * 1000);
@@ -53,11 +86,32 @@ export const usePriceHistory = () => {
         .slice(-MAX_ENTRIES)
         .sort((a, b) => a.timestamp - b.timestamp);
       
+      // Save to localStorage for fast access
       localStorage.setItem(STORAGE_KEY, JSON.stringify(recentHistory));
       setWcoHistory(recentHistory);
       setWaveHistory(recentHistory);
     } catch (error) {
       console.warn('Failed to save price history to localStorage:', error);
+    }
+  }, []);
+
+  // Save new price entry to Supabase
+  const savePriceToSupabase = useCallback(async (entry: PriceHistoryEntry) => {
+    try {
+      const { error } = await supabase
+        .from('price_history')
+        .insert({
+          timestamp: new Date(entry.timestamp).toISOString(),
+          wco_price: entry.wco_price,
+          wave_price: entry.wave_price,
+          source: entry.source
+        });
+
+      if (error) {
+        console.warn('Failed to save price data to Supabase:', error);
+      }
+    } catch (error) {
+      console.warn('Error saving to Supabase:', error);
     }
   }, []);
 
@@ -72,12 +126,15 @@ export const usePriceHistory = () => {
       source: 'w-chain-api'
     };
 
+    // Save to Supabase first
+    savePriceToSupabase(newEntry);
+
     setWcoHistory(prev => {
       const updated = [...prev, newEntry];
       saveToStorage(updated);
       return updated.slice(-MAX_ENTRIES);
     });
-  }, [wcoPrice?.price, wavePrice?.price, saveToStorage]);
+  }, [wcoPrice?.price, wavePrice?.price, saveToStorage, savePriceToSupabase]);
 
   // Set up collection interval
   useEffect(() => {
