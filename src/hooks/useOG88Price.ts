@@ -19,7 +19,7 @@ export const useOG88Price = (): UseOG88PriceReturn => {
   const fetchOG88Price = async () => {
     try {
       setError(null);
-      const response = await fetch('https://og-88-price-7gsl6wujn-serxs-projects.vercel.app/price');
+      const response = await fetch('https://og88-price-api-production.up.railway.app/price');
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
