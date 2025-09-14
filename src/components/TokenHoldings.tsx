@@ -3,10 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Copy, ExternalLink } from 'lucide-react';
-import { formatNumber } from '@/utils/formatters';
-import { toast } from 'sonner';
+import { formatNumber, formatCurrency } from '@/utils/formatters';
 import { useWCOMarketData } from '@/hooks/useWCOMarketData';
 import { useWChainPriceAPI } from '@/hooks/useWChainPriceAPI';
 
@@ -19,20 +16,7 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
   const { data: wcoMarketData } = useWCOMarketData();
   const { wcoPrice, wavePrice } = useWChainPriceAPI();
 
-  const copyAddress = (address: string) => {
-    navigator.clipboard.writeText(address);
-    toast.success('Contract address copied to clipboard');
-  };
-
-  const openExplorer = (address: string) => {
-    window.open(`https://w-chain.com`, '_blank');
-  };
-
-  const formatAddress = (address: string) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  };
-
-  const getTokenPrice = (token: any) => {
+  const getTokenPrice = (token: any): number => {
     // Check if this is WCO token
     const isWCO = token.symbol?.toUpperCase() === 'WCO' || 
                   token.name?.toLowerCase().includes('w coin') ||
@@ -44,24 +28,32 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
     
     // Use W-Chain API prices first (more accurate for native tokens)
     if (isWCO && wcoPrice?.price) {
-      return `$${wcoPrice.price.toFixed(6)}`;
+      return wcoPrice.price;
     }
     
     if (isWAVE && wavePrice?.price) {
-      return `$${wavePrice.price.toFixed(6)}`;
+      return wavePrice.price;
     }
     
     // Fallback to CoinGecko for WCO if W-Chain API unavailable
     if (isWCO && wcoMarketData?.current_price) {
-      return `$${wcoMarketData.current_price.toFixed(6)}`;
+      return wcoMarketData.current_price;
     }
     
     // For other tokens, use exchange_rate if available
     if (token.exchange_rate) {
-      return `$${parseFloat(token.exchange_rate).toFixed(6)}`;
+      return parseFloat(token.exchange_rate);
     }
     
-    return '--';
+    return 0;
+  };
+
+  const getTokenUsdValue = (tokenBalance: TokenBalance) => {
+    const priceValue = getTokenPrice(tokenBalance.token);
+    if (typeof priceValue === 'number' && priceValue > 0) {
+      return priceValue * tokenBalance.balanceInEth;
+    }
+    return tokenBalance.usdValue || 0;
   };
 
   if (loading) {
@@ -121,68 +113,53 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
             <TableHeader>
               <TableRow>
                 <TableHead>Token</TableHead>
-                <TableHead>Contract</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead className="text-right">Balance</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
+                <TableHead className="text-right">USD Value</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {balances.map(({ token, formattedBalance }) => (
-                <TableRow key={token.address}>
+              {balances.map((tokenBalance) => (
+                <TableRow key={tokenBalance.token.address}>
                   <TableCell className="font-medium">
                     <div className="flex items-center space-x-3">
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={token.icon_url || undefined} alt={token.symbol} />
+                        <AvatarImage src={tokenBalance.token.icon_url || undefined} alt={tokenBalance.token.symbol} />
                         <AvatarFallback className="text-xs">
-                          {token.symbol.slice(0, 2)}
+                          {tokenBalance.token.symbol.slice(0, 2)}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <div className="font-medium">{token.name}</div>
-                        <div className="text-sm text-muted-foreground">{token.symbol}</div>
+                        <div className="font-medium">{tokenBalance.token.name}</div>
+                        <div className="text-sm text-muted-foreground">{tokenBalance.token.symbol}</div>
                       </div>
-                    </div>
-                  </TableCell>
-                  
-                  <TableCell className="font-mono text-sm">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-muted-foreground">
-                        {formatAddress(token.address)}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 hover:bg-muted"
-                        onClick={() => copyAddress(token.address)}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
                     </div>
                   </TableCell>
 
                   <TableCell>
                     <div className="text-sm font-medium">
-                      {getTokenPrice(token) !== '--' 
-                        ? getTokenPrice(token)
-                        : <span className="text-muted-foreground">--</span>
-                      }
+                      {(() => {
+                        const price = getTokenPrice(tokenBalance.token);
+                        return typeof price === 'number' && price > 0 
+                          ? `$${price.toFixed(6)}` 
+                          : <span className="text-muted-foreground">--</span>;
+                      })()}
                     </div>
                   </TableCell>
 
                   <TableCell className="text-right font-medium">
-                    {formatNumber(parseFloat(formattedBalance), 4)}
+                    {formatNumber(parseFloat(tokenBalance.formattedBalance), 4)}
                   </TableCell>
 
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 hover:bg-muted"
-                      onClick={() => openExplorer(token.address)}
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                    </Button>
+                  <TableCell className="text-right font-medium">
+                    <div className="text-sm">
+                      {(() => {
+                        const usdValue = getTokenUsdValue(tokenBalance);
+                        return usdValue > 0 
+                          ? formatCurrency(usdValue)
+                          : <span className="text-muted-foreground">--</span>;
+                      })()}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
