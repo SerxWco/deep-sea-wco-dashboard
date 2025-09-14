@@ -1,14 +1,14 @@
 // Formatters that show exact numbers without K/M abbreviations
 export const formatExactNumber = (value: number): string => {
-  return Math.round(value).toLocaleString();
+  return Math.round(value).toLocaleString('en-US');
 };
 
 export const formatExactCurrency = (value: number): string => {
-  return `$${Math.round(value).toLocaleString()}`;
+  return `$${Math.round(value).toLocaleString('en-US')}`;
 };
 
 export const formatExactWCO = (value: number): string => {
-  return `${Math.round(value).toLocaleString()} WCO`;
+  return `${Math.round(value).toLocaleString('en-US')} WCO`;
 };
 
 export const getChangeIndicator = (change: number): string => {
