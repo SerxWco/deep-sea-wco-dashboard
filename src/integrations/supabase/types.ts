@@ -14,7 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      daily_metrics: {
+        Row: {
+          active_wallets: number | null
+          average_transaction_size: number | null
+          circulating_supply: number | null
+          created_at: string
+          id: string
+          market_cap: number | null
+          network_activity_rate: number | null
+          snapshot_date: string
+          snapshot_time: string
+          total_holders: number | null
+          total_volume: number | null
+          transactions_24h: number | null
+          wco_burnt_24h: number | null
+          wco_burnt_total: number | null
+          wco_moved_24h: number | null
+        }
+        Insert: {
+          active_wallets?: number | null
+          average_transaction_size?: number | null
+          circulating_supply?: number | null
+          created_at?: string
+          id?: string
+          market_cap?: number | null
+          network_activity_rate?: number | null
+          snapshot_date: string
+          snapshot_time?: string
+          total_holders?: number | null
+          total_volume?: number | null
+          transactions_24h?: number | null
+          wco_burnt_24h?: number | null
+          wco_burnt_total?: number | null
+          wco_moved_24h?: number | null
+        }
+        Update: {
+          active_wallets?: number | null
+          average_transaction_size?: number | null
+          circulating_supply?: number | null
+          created_at?: string
+          id?: string
+          market_cap?: number | null
+          network_activity_rate?: number | null
+          snapshot_date?: string
+          snapshot_time?: string
+          total_holders?: number | null
+          total_volume?: number | null
+          transactions_24h?: number | null
+          wco_burnt_24h?: number | null
+          wco_burnt_total?: number | null
+          wco_moved_24h?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

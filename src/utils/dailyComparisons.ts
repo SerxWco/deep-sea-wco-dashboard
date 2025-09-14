@@ -1,20 +1,24 @@
-interface DailyMetric {
+import { supabase } from '@/integrations/supabase/client';
+
+export interface DailyMetric {
   date: string;
   totalHolders: number;
   transactions24h: number;
   wcoMoved24h: number;
+  marketCap: number;
+  totalVolume: number;
+  circulatingSupply: number;
+  wcoBurntTotal: number;
+  wcoBurnt24h: number;
   activeWallets: number;
   averageTransactionSize: number;
   networkActivityRate: number;
-  marketCap: number;
-  volume24h: number;
-  circulatingSupply: number;
-  wcoBurnt: number;
 }
 
 const STORAGE_KEY = 'wco_daily_metrics';
 const MAX_DAYS = 30;
 
+// Legacy localStorage functions (kept as fallback)
 export const saveDailyMetrics = (metrics: Omit<DailyMetric, 'date'>) => {
   const today = new Date().toISOString().split('T')[0];
   
@@ -37,8 +41,85 @@ export const saveDailyMetrics = (metrics: Omit<DailyMetric, 'date'>) => {
   }
 };
 
-export const getDailyComparison = (currentMetrics: Omit<DailyMetric, 'date'>) => {
+// New Supabase-based functions
+export const getLatestSnapshot = async (): Promise<DailyMetric | null> => {
   try {
+    const { data, error } = await supabase
+      .from('daily_metrics')
+      .select('*')
+      .order('snapshot_date', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data) {
+      console.warn('No snapshot data available:', error);
+      return null;
+    }
+
+    return {
+      date: data.snapshot_date,
+      totalHolders: data.total_holders || 0,
+      transactions24h: data.transactions_24h || 0,
+      wcoMoved24h: Number(data.wco_moved_24h) || 0,
+      marketCap: Number(data.market_cap) || 0,
+      totalVolume: Number(data.total_volume) || 0,
+      circulatingSupply: Number(data.circulating_supply) || 0,
+      wcoBurntTotal: Number(data.wco_burnt_total) || 0,
+      wcoBurnt24h: Number(data.wco_burnt_24h) || 0,
+      activeWallets: data.active_wallets || 0,
+      averageTransactionSize: Number(data.average_transaction_size) || 0,
+      networkActivityRate: Number(data.network_activity_rate) || 0,
+    };
+  } catch (error) {
+    console.warn('Failed to get latest snapshot:', error);
+    return null;
+  }
+};
+
+export const getPreviousSnapshot = async (): Promise<DailyMetric | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('daily_metrics')
+      .select('*')
+      .order('snapshot_date', { ascending: false })
+      .limit(2);
+
+    if (error || !data || data.length < 2) {
+      console.warn('Not enough snapshot data for comparison:', error);
+      return null;
+    }
+
+    const previousData = data[1];
+    return {
+      date: previousData.snapshot_date,
+      totalHolders: previousData.total_holders || 0,
+      transactions24h: previousData.transactions_24h || 0,
+      wcoMoved24h: Number(previousData.wco_moved_24h) || 0,
+      marketCap: Number(previousData.market_cap) || 0,
+      totalVolume: Number(previousData.total_volume) || 0,
+      circulatingSupply: Number(previousData.circulating_supply) || 0,
+      wcoBurntTotal: Number(previousData.wco_burnt_total) || 0,
+      wcoBurnt24h: Number(previousData.wco_burnt_24h) || 0,
+      activeWallets: previousData.active_wallets || 0,
+      averageTransactionSize: Number(previousData.average_transaction_size) || 0,
+      networkActivityRate: Number(previousData.network_activity_rate) || 0,
+    };
+  } catch (error) {
+    console.warn('Failed to get previous snapshot:', error);
+    return null;
+  }
+};
+
+export const getDailyComparison = async (currentMetrics: Omit<DailyMetric, 'date'>) => {
+  try {
+    // Try to get comparison from Supabase first
+    const previousSnapshot = await getPreviousSnapshot();
+    
+    if (previousSnapshot) {
+      return calculateChanges(currentMetrics, previousSnapshot);
+    }
+
+    // Fallback to localStorage for backward compatibility
     const stored = localStorage.getItem(STORAGE_KEY);
     const dailyData: DailyMetric[] = stored ? JSON.parse(stored) : [];
     
@@ -50,52 +131,60 @@ export const getDailyComparison = (currentMetrics: Omit<DailyMetric, 'date'>) =>
     
     if (!yesterday) return null;
     
-    return {
-      totalHolders: {
-        change: currentMetrics.totalHolders - yesterday.totalHolders,
-        percentage: yesterday.totalHolders > 0 ? ((currentMetrics.totalHolders - yesterday.totalHolders) / yesterday.totalHolders) * 100 : 0
-      },
-      transactions24h: {
-        change: currentMetrics.transactions24h - yesterday.transactions24h,
-        percentage: yesterday.transactions24h > 0 ? ((currentMetrics.transactions24h - yesterday.transactions24h) / yesterday.transactions24h) * 100 : 0
-      },
-      wcoMoved24h: {
-        change: currentMetrics.wcoMoved24h - yesterday.wcoMoved24h,
-        percentage: yesterday.wcoMoved24h > 0 ? ((currentMetrics.wcoMoved24h - yesterday.wcoMoved24h) / yesterday.wcoMoved24h) * 100 : 0
-      },
-      activeWallets: {
-        change: currentMetrics.activeWallets - yesterday.activeWallets,
-        percentage: yesterday.activeWallets > 0 ? ((currentMetrics.activeWallets - yesterday.activeWallets) / yesterday.activeWallets) * 100 : 0
-      },
-      averageTransactionSize: {
-        change: currentMetrics.averageTransactionSize - yesterday.averageTransactionSize,
-        percentage: yesterday.averageTransactionSize > 0 ? ((currentMetrics.averageTransactionSize - yesterday.averageTransactionSize) / yesterday.averageTransactionSize) * 100 : 0
-      },
-      networkActivityRate: {
-        change: currentMetrics.networkActivityRate - yesterday.networkActivityRate,
-        percentage: yesterday.networkActivityRate > 0 ? ((currentMetrics.networkActivityRate - yesterday.networkActivityRate) / yesterday.networkActivityRate) * 100 : 0
-      },
-      marketCap: {
-        change: currentMetrics.marketCap - yesterday.marketCap,
-        percentage: yesterday.marketCap > 0 ? ((currentMetrics.marketCap - yesterday.marketCap) / yesterday.marketCap) * 100 : 0
-      },
-      volume24h: {
-        change: currentMetrics.volume24h - yesterday.volume24h,
-        percentage: yesterday.volume24h > 0 ? ((currentMetrics.volume24h - yesterday.volume24h) / yesterday.volume24h) * 100 : 0
-      },
-      circulatingSupply: {
-        change: currentMetrics.circulatingSupply - yesterday.circulatingSupply,
-        percentage: yesterday.circulatingSupply > 0 ? ((currentMetrics.circulatingSupply - yesterday.circulatingSupply) / yesterday.circulatingSupply) * 100 : 0
-      },
-      wcoBurnt: {
-        change: currentMetrics.wcoBurnt - yesterday.wcoBurnt,
-        percentage: yesterday.wcoBurnt > 0 ? ((currentMetrics.wcoBurnt - yesterday.wcoBurnt) / yesterday.wcoBurnt) * 100 : 0
-      }
-    };
+    return calculateChanges(currentMetrics, yesterday);
   } catch (error) {
     console.warn('Failed to get daily comparison:', error);
     return null;
   }
+};
+
+const calculateChanges = (current: Omit<DailyMetric, 'date'>, previous: DailyMetric) => {
+  return {
+    totalHolders: {
+      change: current.totalHolders - previous.totalHolders,
+      percentage: previous.totalHolders > 0 ? ((current.totalHolders - previous.totalHolders) / previous.totalHolders) * 100 : 0
+    },
+    transactions24h: {
+      change: current.transactions24h - previous.transactions24h,
+      percentage: previous.transactions24h > 0 ? ((current.transactions24h - previous.transactions24h) / previous.transactions24h) * 100 : 0
+    },
+    wcoMoved24h: {
+      change: current.wcoMoved24h - previous.wcoMoved24h,
+      percentage: previous.wcoMoved24h > 0 ? ((current.wcoMoved24h - previous.wcoMoved24h) / previous.wcoMoved24h) * 100 : 0
+    },
+    activeWallets: {
+      change: current.activeWallets - previous.activeWallets,
+      percentage: previous.activeWallets > 0 ? ((current.activeWallets - previous.activeWallets) / previous.activeWallets) * 100 : 0
+    },
+    averageTransactionSize: {
+      change: current.averageTransactionSize - previous.averageTransactionSize,
+      percentage: previous.averageTransactionSize > 0 ? ((current.averageTransactionSize - previous.averageTransactionSize) / previous.averageTransactionSize) * 100 : 0
+    },
+    networkActivityRate: {
+      change: current.networkActivityRate - previous.networkActivityRate,
+      percentage: previous.networkActivityRate > 0 ? ((current.networkActivityRate - previous.networkActivityRate) / previous.networkActivityRate) * 100 : 0
+    },
+    marketCap: {
+      change: current.marketCap - previous.marketCap,
+      percentage: previous.marketCap > 0 ? ((current.marketCap - previous.marketCap) / previous.marketCap) * 100 : 0
+    },
+    totalVolume: {
+      change: current.totalVolume - previous.totalVolume,
+      percentage: previous.totalVolume > 0 ? ((current.totalVolume - previous.totalVolume) / previous.totalVolume) * 100 : 0
+    },
+    circulatingSupply: {
+      change: current.circulatingSupply - previous.circulatingSupply,
+      percentage: previous.circulatingSupply > 0 ? ((current.circulatingSupply - previous.circulatingSupply) / previous.circulatingSupply) * 100 : 0
+    },
+    wcoBurntTotal: {
+      change: current.wcoBurntTotal - previous.wcoBurntTotal,
+      percentage: previous.wcoBurntTotal > 0 ? ((current.wcoBurntTotal - previous.wcoBurntTotal) / previous.wcoBurntTotal) * 100 : 0
+    },
+    wcoBurnt24h: {
+      change: current.wcoBurnt24h - previous.wcoBurnt24h,
+      percentage: previous.wcoBurnt24h > 0 ? ((current.wcoBurnt24h - previous.wcoBurnt24h) / previous.wcoBurnt24h) * 100 : 0
+    }
+  };
 };
 
 export const formatDailyChange = (change: number, showPercentage = false): { value: string; isPositive: boolean } => {

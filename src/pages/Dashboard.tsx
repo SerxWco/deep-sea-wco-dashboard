@@ -36,21 +36,31 @@ export default function Dashboard() {
   const { wcoPrice, wavePrice, loading: priceLoading, error: priceError } = useWChainPriceAPI();
   
   const [showReportGenerator, setShowReportGenerator] = useState(false);
+  const [dailyComparison, setDailyComparison] = useState<any>(null);
 
-  // Calculate daily comparison data
-  const dailyComparison = data && networkStats && burnData && supplyData ? 
-    getDailyComparison({
-      totalHolders,
-      transactions24h: networkStats.transactions24h,
-      wcoMoved24h: networkStats.wcoMoved24h,
-      activeWallets: networkStats.activeWallets,
-      averageTransactionSize: networkStats.averageTransactionSize,
-      networkActivityRate: networkStats.networkActivityRate,
-      marketCap: data.market_cap,
-      volume24h: data.total_volume,
-      circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
-      wcoBurnt: burnData.totalBurnt
-    }) : null;
+  // Calculate daily comparison data asynchronously
+  useEffect(() => {
+    const fetchComparison = async () => {
+      if (data && networkStats && burnData && supplyData) {
+        const comparison = await getDailyComparison({
+          totalHolders,
+          transactions24h: networkStats.transactions24h,
+          wcoMoved24h: networkStats.wcoMoved24h,
+          activeWallets: networkStats.activeWallets,
+          averageTransactionSize: networkStats.averageTransactionSize,
+          networkActivityRate: networkStats.networkActivityRate,
+          marketCap: data.market_cap,
+          totalVolume: data.total_volume,
+          circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
+          wcoBurntTotal: burnData.totalBurnt,
+          wcoBurnt24h: burnData.burnt24h || 0
+        });
+        setDailyComparison(comparison);
+      }
+    };
+
+    fetchComparison();
+  }, [data, networkStats, burnData, supplyData, totalHolders]);
 
   // Save daily metrics when data is available
   useEffect(() => {
@@ -63,9 +73,10 @@ export default function Dashboard() {
         averageTransactionSize: networkStats.averageTransactionSize,
         networkActivityRate: networkStats.networkActivityRate,
         marketCap: data.market_cap,
-        volume24h: data.total_volume,
+        totalVolume: data.total_volume,
         circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
-        wcoBurnt: burnData.totalBurnt
+        wcoBurntTotal: burnData.totalBurnt,
+        wcoBurnt24h: burnData.burnt24h || 0
       });
     }
   }, [data, networkStats, burnData, supplyData, totalHolders, loading, networkLoading, burnLoading, supplyLoading]);
@@ -86,9 +97,9 @@ export default function Dashboard() {
       marketCap: data.market_cap,
       marketCapChange: dailyComparison?.marketCap?.change || 0,
       volume24h: data.total_volume,
-      volumeChange: dailyComparison?.volume24h?.change || 0,
+      volumeChange: dailyComparison?.totalVolume?.change || 0,
       wcoBurnt: burnData.totalBurnt,
-      wcoBurntChange: dailyComparison?.wcoBurnt?.change || 0
+      wcoBurntChange: dailyComparison?.wcoBurntTotal?.change || 0
     };
   };
 
