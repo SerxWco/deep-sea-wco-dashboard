@@ -6,6 +6,10 @@ interface DailyMetric {
   activeWallets: number;
   averageTransactionSize: number;
   networkActivityRate: number;
+  marketCap: number;
+  volume24h: number;
+  circulatingSupply: number;
+  wcoBurnt: number;
 }
 
 const STORAGE_KEY = 'wco_daily_metrics';
@@ -70,6 +74,22 @@ export const getDailyComparison = (currentMetrics: Omit<DailyMetric, 'date'>) =>
       networkActivityRate: {
         change: currentMetrics.networkActivityRate - yesterday.networkActivityRate,
         percentage: yesterday.networkActivityRate > 0 ? ((currentMetrics.networkActivityRate - yesterday.networkActivityRate) / yesterday.networkActivityRate) * 100 : 0
+      },
+      marketCap: {
+        change: currentMetrics.marketCap - yesterday.marketCap,
+        percentage: yesterday.marketCap > 0 ? ((currentMetrics.marketCap - yesterday.marketCap) / yesterday.marketCap) * 100 : 0
+      },
+      volume24h: {
+        change: currentMetrics.volume24h - yesterday.volume24h,
+        percentage: yesterday.volume24h > 0 ? ((currentMetrics.volume24h - yesterday.volume24h) / yesterday.volume24h) * 100 : 0
+      },
+      circulatingSupply: {
+        change: currentMetrics.circulatingSupply - yesterday.circulatingSupply,
+        percentage: yesterday.circulatingSupply > 0 ? ((currentMetrics.circulatingSupply - yesterday.circulatingSupply) / yesterday.circulatingSupply) * 100 : 0
+      },
+      wcoBurnt: {
+        change: currentMetrics.wcoBurnt - yesterday.wcoBurnt,
+        percentage: yesterday.wcoBurnt > 0 ? ((currentMetrics.wcoBurnt - yesterday.wcoBurnt) / yesterday.wcoBurnt) * 100 : 0
       }
     };
   } catch (error) {

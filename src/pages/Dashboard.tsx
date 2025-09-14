@@ -1,5 +1,7 @@
+import { useState, useEffect } from "react";
 import { CryptoMetricCard } from "@/components/CryptoMetricCard";
 import { TradingViewWidget } from "@/components/TradingViewWidget";
+import { DailyReportGenerator } from "@/components/DailyReportGenerator";
 import { useWCOMarketData } from "@/hooks/useWCOMarketData";
 import { useWChainNetworkStats } from "@/hooks/useWChainNetworkStats";
 import { useWalletLeaderboard } from "@/hooks/useWalletLeaderboard";
@@ -7,7 +9,9 @@ import { useWCOBurnTracker } from "@/hooks/useWCOBurnTracker";
 import { useWCOSupplyInfo } from "@/hooks/useWCOSupplyInfo";
 import { useWChainPriceAPI } from "@/hooks/useWChainPriceAPI";
 import { formatCurrency, formatPercentage, formatNumber } from "@/utils/formatters";
-import { formatDailyChange } from "@/utils/dailyComparisons";
+import { formatDailyChange, saveDailyMetrics, getDailyComparison } from "@/utils/dailyComparisons";
+import { formatExactNumber } from "@/utils/exactFormatters";
+import { Button } from "@/components/ui/button";
 import { 
   DollarSign, 
   TrendingUp, 
@@ -19,7 +23,8 @@ import {
   ArrowUpRight,
   Coins,
   RefreshCw,
-  Flame
+  Flame,
+  FileText
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -29,19 +34,88 @@ export default function Dashboard() {
   const { data: burnData, loading: burnLoading, error: burnError } = useWCOBurnTracker();
   const { data: supplyData, loading: supplyLoading, error: supplyError } = useWCOSupplyInfo();
   const { wcoPrice, wavePrice, loading: priceLoading, error: priceError } = useWChainPriceAPI();
+  
+  const [showReportGenerator, setShowReportGenerator] = useState(false);
+
+  // Calculate daily comparison data
+  const dailyComparison = data && networkStats && burnData && supplyData ? 
+    getDailyComparison({
+      totalHolders,
+      transactions24h: networkStats.transactions24h,
+      wcoMoved24h: networkStats.wcoMoved24h,
+      activeWallets: networkStats.activeWallets,
+      averageTransactionSize: networkStats.averageTransactionSize,
+      networkActivityRate: networkStats.networkActivityRate,
+      marketCap: data.market_cap,
+      volume24h: data.total_volume,
+      circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
+      wcoBurnt: burnData.totalBurnt
+    }) : null;
+
+  // Save daily metrics when data is available
+  useEffect(() => {
+    if (data && networkStats && burnData && supplyData && !loading && !networkLoading && !burnLoading && !supplyLoading) {
+      saveDailyMetrics({
+        totalHolders,
+        transactions24h: networkStats.transactions24h,
+        wcoMoved24h: networkStats.wcoMoved24h,
+        activeWallets: networkStats.activeWallets,
+        averageTransactionSize: networkStats.averageTransactionSize,
+        networkActivityRate: networkStats.networkActivityRate,
+        marketCap: data.market_cap,
+        volume24h: data.total_volume,
+        circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
+        wcoBurnt: burnData.totalBurnt
+      });
+    }
+  }, [data, networkStats, burnData, supplyData, totalHolders, loading, networkLoading, burnLoading, supplyLoading]);
+
+  // Generate report data
+  const getReportData = () => {
+    if (!data || !networkStats || !burnData || !supplyData) return null;
+    
+    return {
+      totalHolders,
+      holdersChange: dailyComparison?.totalHolders?.change || 0,
+      transactions24h: networkStats.transactions24h,
+      transactionsChange: dailyComparison?.transactions24h?.change || 0,
+      wcoMoved24h: networkStats.wcoMoved24h,
+      wcoMovedChange: dailyComparison?.wcoMoved24h?.change || 0,
+      circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
+      circulatingSupplyChange: dailyComparison?.circulatingSupply?.change || 0,
+      marketCap: data.market_cap,
+      marketCapChange: dailyComparison?.marketCap?.change || 0,
+      volume24h: data.total_volume,
+      volumeChange: dailyComparison?.volume24h?.change || 0,
+      wcoBurnt: burnData.totalBurnt,
+      wcoBurntChange: dailyComparison?.wcoBurnt?.change || 0
+    };
+  };
 
   return (
     <div className="min-h-screen bg-ocean-gradient p-6">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              W Coin Dashboard
-            </h1>
-            {(loading || networkLoading || burnLoading || supplyLoading || priceLoading) && (
-              <RefreshCw className="h-5 w-5 text-accent animate-spin" />
-            )}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-foreground mb-2">
+                W Coin Dashboard
+              </h1>
+              {(loading || networkLoading || burnLoading || supplyLoading || priceLoading) && (
+                <RefreshCw className="h-5 w-5 text-accent animate-spin" />
+              )}
+            </div>
+            
+            <Button 
+              onClick={() => setShowReportGenerator(true)}
+              className="flex items-center gap-2"
+              variant="outline"
+              disabled={!data || !networkStats || !burnData || !supplyData}
+            >
+              <FileText className="h-4 w-4" />
+              Generate Daily Report
+            </Button>
           </div>
           <p className="text-muted-foreground">
             {(error || networkError || burnError || supplyError || priceError) ? "Unable to fetch live data - showing cached values" : "Live crypto analytics and ocean creature ecosystem"}
@@ -121,17 +195,17 @@ export default function Dashboard() {
           
           <CryptoMetricCard
             title="24h Transactions"
-            value={networkStats ? formatNumber(networkStats.transactions24h) : networkLoading ? "..." : "N/A"}
-            change={networkStats?.dailyComparison ? 
-              formatDailyChange(networkStats.dailyComparison.transactions24h.change) : undefined}
+            value={networkStats ? formatExactNumber(networkStats.transactions24h) : networkLoading ? "..." : "N/A"}
+            change={dailyComparison ? 
+              formatDailyChange(dailyComparison.transactions24h.change) : undefined}
             icon={<ArrowUpRight className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
             title="WCO Burnt"
-            value={burnData ? `${formatNumber(burnData.totalBurnt)} WCO` : burnLoading ? "..." : "N/A"}
+            value={burnData ? `${formatExactNumber(burnData.totalBurnt)} WCO` : burnLoading ? "..." : "N/A"}
             change={burnData && burnData.change24h !== 0 ? {
-              value: `${formatNumber(burnData.burnt24h)} WCO in 24h`,
+              value: `${formatExactNumber(burnData.burnt24h)} WCO in 24h`,
               isPositive: burnData.change24h > 0
             } : undefined}
             icon={<Flame className="h-5 w-5" />}
@@ -140,19 +214,25 @@ export default function Dashboard() {
           <CryptoMetricCard
             title="24h WCO Moved"
             value={networkStats ? `${formatNumber(networkStats.wcoMoved24h)} WCO` : networkLoading ? "..." : "N/A"}
-            change={networkStats?.dailyComparison ? 
-              formatDailyChange(networkStats.dailyComparison.wcoMoved24h.change) : undefined}
+            change={dailyComparison ? 
+              formatDailyChange(dailyComparison.wcoMoved24h.change) : undefined}
             icon={<Coins className="h-5 w-5" />}
           />
           
           <CryptoMetricCard
             title="Avg Transaction Size"
             value={networkStats ? `${networkStats.averageTransactionSize} WCO` : networkLoading ? "..." : "N/A"}
-            change={networkStats?.dailyComparison ? 
-              formatDailyChange(networkStats.dailyComparison.averageTransactionSize.change) : undefined}
+            change={dailyComparison ? 
+              formatDailyChange(dailyComparison.averageTransactionSize.change) : undefined}
             icon={<BarChart3 className="h-5 w-5" />}
           />
         </div>
+        
+        <DailyReportGenerator 
+          isOpen={showReportGenerator}
+          onOpenChange={setShowReportGenerator}
+          reportData={getReportData()}
+        />
       </div>
     </div>
   );

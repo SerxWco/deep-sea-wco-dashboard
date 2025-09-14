@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { saveDailyMetrics, getDailyComparison } from '@/utils/dailyComparisons';
 import { wchainGraphQL } from '@/services/wchainGraphQL';
 
 interface NetworkStats {
@@ -36,14 +35,6 @@ interface WChainNetworkStats {
   activeWallets: number;
   averageTransactionSize: number;
   networkActivityRate: number;
-  dailyComparison?: {
-    totalHolders: { change: number; percentage: number };
-    transactions24h: { change: number; percentage: number };
-    wcoMoved24h: { change: number; percentage: number };
-    activeWallets: { change: number; percentage: number };
-    averageTransactionSize: { change: number; percentage: number };
-    networkActivityRate: { change: number; percentage: number };
-  } | null;
 }
 
 interface UseWChainNetworkStatsReturn {
@@ -135,14 +126,7 @@ export const useWChainNetworkStats = (totalTrackedWallets: number = 0): UseWChai
     console.log('GraphQL Stats:', newStats);
     console.log('Active wallets (GraphQL):', activeWalletData.activeWallets.length);
 
-    // Save daily metrics and get comparison
-    saveDailyMetrics(newStats);
-    const dailyComparison = getDailyComparison(newStats);
-
-    setData({
-      ...newStats,
-      dailyComparison,
-    });
+    setData(newStats);
   };
 
   const fetchNetworkStatsREST = async () => {
@@ -238,14 +222,7 @@ export const useWChainNetworkStats = (totalTrackedWallets: number = 0): UseWChai
     console.log('REST Stats:', newStats);
     console.log('Active wallets (REST):', activeWallets);
 
-    // Save daily metrics and get comparison
-    saveDailyMetrics(newStats);
-    const dailyComparison = getDailyComparison(newStats);
-
-    setData({
-      ...newStats,
-      dailyComparison,
-    });
+    setData(newStats);
   };
 
   useEffect(() => {
