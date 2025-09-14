@@ -7,6 +7,7 @@ import { formatNumber } from '@/utils/formatters';
 import { useToast } from '@/hooks/use-toast';
 import { useWCOMarketData } from '@/hooks/useWCOMarketData';
 import { useWChainPriceAPI } from '@/hooks/useWChainPriceAPI';
+import { useOG88Price } from '@/hooks/useOG88Price';
 
 interface TokenListItemProps {
   token: WChainToken;
@@ -18,6 +19,7 @@ export const TokenListItem = ({ token, balance, hasWallet }: TokenListItemProps)
   const { toast } = useToast();
   const { data: wcoMarketData } = useWCOMarketData();
   const { wcoPrice, wavePrice } = useWChainPriceAPI();
+  const { og88Price } = useOG88Price();
 
   const copyAddress = () => {
     navigator.clipboard.writeText(token.address);
@@ -45,7 +47,14 @@ export const TokenListItem = ({ token, balance, hasWallet }: TokenListItemProps)
     const isWAVE = token.symbol?.toUpperCase() === 'WAVE' ||
                    token.name?.toLowerCase().includes('wave');
     
-    // Use W-Chain API prices first (more accurate for native tokens)
+    // Check if this is OG88 token
+    const isOG88 = token.address.toLowerCase() === '0xd1841fc048b488d92fdf73624a2128d10a847e88';
+    
+    // Use specific price feeds for each token
+    if (isOG88 && og88Price?.price) {
+      return `$${og88Price.price.toFixed(6)}`;
+    }
+    
     if (isWCO && wcoPrice?.price) {
       return `$${wcoPrice.price.toFixed(6)}`;
     }

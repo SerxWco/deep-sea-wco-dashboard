@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { WChainToken, TokenBalance } from '@/types/token';
+import { useWCOMarketData } from './useWCOMarketData';
+import { useWChainPriceAPI } from './useWChainPriceAPI';
+import { useOG88Price } from './useOG88Price';
 
 interface UseTokenBalancesReturn {
   balances: TokenBalance[];
@@ -77,6 +80,11 @@ export const useTokenBalances = (
   const [balances, setBalances] = useState<TokenBalance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Get price data
+  const { data: wcoMarketData } = useWCOMarketData();
+  const { wcoPrice, wavePrice } = useWChainPriceAPI();
+  const { og88Price } = useOG88Price();
 
   const fetchBalances = useCallback(async () => {
     if (!walletAddress || tokens.length === 0) {
@@ -129,8 +137,28 @@ export const useTokenBalances = (
 
             console.log(`✅ Found balance for ${token.symbol}: ${formattedBalance}`);
 
-            const exchangeRate = token.exchange_rate ? parseFloat(token.exchange_rate) : null;
-            const usdValue = exchangeRate ? balanceInEth * exchangeRate : undefined;
+            // Calculate USD value using appropriate price feed
+            let usdValue: number | undefined;
+            
+            // Check token type for specific price feeds
+            const isWCO = token.symbol?.toUpperCase() === 'WCO' || 
+                         token.name?.toLowerCase().includes('w coin') ||
+                         token.name?.toLowerCase().includes('wadzcoin');
+            const isWAVE = token.symbol?.toUpperCase() === 'WAVE' ||
+                          token.name?.toLowerCase().includes('wave');
+            const isOG88 = token.address.toLowerCase() === '0xd1841fc048b488d92fdf73624a2128d10a847e88';
+
+            if (isOG88 && og88Price?.price) {
+              usdValue = balanceInEth * og88Price.price;
+            } else if (isWCO && wcoPrice?.price) {
+              usdValue = balanceInEth * wcoPrice.price;
+            } else if (isWCO && wcoMarketData?.current_price) {
+              usdValue = balanceInEth * wcoMarketData.current_price;
+            } else if (isWAVE && wavePrice?.price) {
+              usdValue = balanceInEth * wavePrice.price;
+            } else if (token.exchange_rate) {
+              usdValue = balanceInEth * parseFloat(token.exchange_rate);
+            }
 
             return {
               token,
