@@ -196,7 +196,7 @@ export default function Dashboard() {
           
           <CryptoMetricCard
             title="Circulating Supply"
-            value={supplyData ? `${formatNumber(parseFloat(supplyData.summary.circulating_supply_wco))} WCO` : supplyLoading ? "..." : "N/A"}
+            value={supplyData ? `${parseFloat(supplyData.summary.circulating_supply_wco).toLocaleString()} WCO` : supplyLoading ? "..." : "N/A"}
             change={supplyData ? {
               value: `of ${formatNumber(parseFloat(supplyData.summary.initial_supply_wco))} total`,
               isPositive: true
