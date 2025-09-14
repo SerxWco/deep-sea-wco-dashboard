@@ -37,7 +37,7 @@ export default function Dashboard() {
         <div className="mb-8">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold text-foreground mb-2">
-              WCO Ocean Dashboard
+              W Coin Dashboard
             </h1>
             {(loading || networkLoading || burnLoading || supplyLoading || priceLoading) && (
               <RefreshCw className="h-5 w-5 text-accent animate-spin" />
@@ -57,12 +57,6 @@ export default function Dashboard() {
               value: formatPercentage(data.price_change_percentage_24h), 
               isPositive: data.price_change_percentage_24h >= 0 
             } : undefined}
-            icon={<DollarSign className="h-5 w-5" />}
-          />
-          
-          <CryptoMetricCard
-            title="WAVE Price"
-            value={wavePrice?.price ? formatCurrency(wavePrice.price) : priceLoading ? "Loading..." : "N/A"}
             icon={<DollarSign className="h-5 w-5" />}
           />
           
