@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useWChainPriceAPI } from './useWChainPriceAPI';
+import { useWCOSupplyInfo } from './useWCOSupplyInfo';
 
 interface WCOMarketData {
   current_price: number;
@@ -22,6 +23,7 @@ export const useWCOMarketData = (): UseWCOMarketDataReturn => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { wcoPrice, loading: wchainLoading } = useWChainPriceAPI();
+  const { data: supplyData, loading: supplyLoading } = useWCOSupplyInfo();
 
   const fetchWCOData = async () => {
     try {
@@ -46,11 +48,20 @@ export const useWCOMarketData = (): UseWCOMarketDataReturn => {
       const marketData = result[0];
       
       // Use W-Chain API price if available, otherwise use CoinGecko price
+      const currentPrice = (wcoPrice?.price && !wchainLoading) ? wcoPrice.price : (marketData.current_price || 0);
+      
+      // Calculate market cap using W-Chain supply data if available
+      const circulatingSupply = supplyData?.summary?.circulating_supply_wco 
+        ? parseFloat(supplyData.summary.circulating_supply_wco)
+        : (marketData.circulating_supply || 0);
+      
+      const calculatedMarketCap = currentPrice * circulatingSupply;
+      
       const finalData = {
-        current_price: (wcoPrice?.price && !wchainLoading) ? wcoPrice.price : (marketData.current_price || 0),
-        market_cap: marketData.market_cap || 0,
+        current_price: currentPrice,
+        market_cap: calculatedMarketCap,
         total_volume: marketData.total_volume || 0,
-        circulating_supply: marketData.circulating_supply || 0,
+        circulating_supply: circulatingSupply,
         price_change_24h: marketData.price_change_24h || 0,
         price_change_percentage_24h: marketData.price_change_percentage_24h || 0,
         ath: marketData.ath || 0,

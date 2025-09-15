@@ -44,19 +44,41 @@ async function collectMetrics(): Promise<MetricsData> {
   }
   
   try {
-    // Fetch CoinGecko market data
-    console.log('Fetching CoinGecko market data...');
+    // Fetch W-Chain price data
+    console.log('Fetching W-Chain price data...');
+    const priceResponse = await fetch('https://oracle.w-chain.com/api/wco/price');
+    let wcoPrice = 0;
+    if (priceResponse.ok) {
+      const priceData = await priceResponse.json();
+      console.log('W-Chain price data:', priceData);
+      wcoPrice = priceData.price || 0;
+    }
+    
+    // Fetch W-Chain supply data
+    console.log('Fetching W-Chain supply data...');
+    const supplyResponse = await fetch('https://oracle.w-chain.com/api/wco/supply-info');
+    let circulatingSupply = 0;
+    if (supplyResponse.ok) {
+      const supplyData = await supplyResponse.json();
+      console.log('W-Chain supply data:', supplyData);
+      circulatingSupply = parseFloat(supplyData.summary?.circulating_supply_wco) || 0;
+    }
+    
+    // Calculate market cap using W-Chain data
+    metrics.marketCap = wcoPrice * circulatingSupply;
+    metrics.circulatingSupply = circulatingSupply;
+    
+    // Fetch CoinGecko for volume data only
+    console.log('Fetching CoinGecko volume data...');
     const coinGeckoResponse = await fetch('https://api.coingecko.com/api/v3/coins/wadzchain-token');
     if (coinGeckoResponse.ok) {
       const coinGeckoData = await coinGeckoResponse.json();
       console.log('CoinGecko data:', coinGeckoData.market_data);
       
-      metrics.marketCap = coinGeckoData.market_data?.market_cap?.usd || 0;
       metrics.totalVolume = coinGeckoData.market_data?.total_volume?.usd || 0;
-      metrics.circulatingSupply = coinGeckoData.market_data?.circulating_supply || 0;
     }
   } catch (error) {
-    console.error('Error fetching CoinGecko data:', error);
+    console.error('Error fetching market data:', error);
   }
   
   try {
