@@ -25,12 +25,11 @@ export const useWCOMarketData = (): UseWCOMarketDataReturn => {
   const { wcoPrice, loading: wchainLoading } = useWChainPriceAPI();
   const { data: supplyData, loading: supplyLoading } = useWCOSupplyInfo();
 
-  const fetchWCOData = async () => {
+  const fetchCoinGeckoData = async () => {
     try {
-      setLoading(true);
       setError(null);
       
-      // CoinGecko API endpoint for WadzCoin (WCO)
+      // Only fetch volume data from CoinGecko
       const response = await fetch(
         'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=wadzcoin&order=market_cap_desc&per_page=1&page=1&sparkline=false'
       );
@@ -47,43 +46,74 @@ export const useWCOMarketData = (): UseWCOMarketDataReturn => {
 
       const marketData = result[0];
       
-      // Use W-Chain API price if available, otherwise use CoinGecko price
-      const currentPrice = (wcoPrice?.price && !wchainLoading) ? wcoPrice.price : (marketData.current_price || 0);
-      
-      // Calculate market cap using W-Chain supply data if available
-      const circulatingSupply = supplyData?.summary?.circulating_supply_wco 
-        ? parseFloat(supplyData.summary.circulating_supply_wco)
-        : (marketData.circulating_supply || 0);
-      
-      const calculatedMarketCap = currentPrice * circulatingSupply;
-      
-      const finalData = {
-        current_price: currentPrice,
-        market_cap: calculatedMarketCap,
+      return {
         total_volume: marketData.total_volume || 0,
-        circulating_supply: circulatingSupply,
         price_change_24h: marketData.price_change_24h || 0,
         price_change_percentage_24h: marketData.price_change_percentage_24h || 0,
         ath: marketData.ath || 0,
       };
-      
-      setData(finalData);
     } catch (err) {
-      console.error('Error fetching WCO data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch WCO data');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching CoinGecko data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch CoinGecko data');
+      return {
+        total_volume: 0,
+        price_change_24h: 0,
+        price_change_percentage_24h: 0,
+        ath: 0,
+      };
     }
   };
 
+  // Fetch CoinGecko data once on mount
   useEffect(() => {
-    fetchWCOData();
+    fetchCoinGeckoData().then(coinGeckoData => {
+      setData(prev => prev ? { ...prev, ...coinGeckoData } : null);
+    });
     
-    // Refresh data every 30 seconds
-    const interval = setInterval(fetchWCOData, 30000);
+    // Refresh CoinGecko data every 5 minutes
+    const interval = setInterval(() => {
+      fetchCoinGeckoData().then(coinGeckoData => {
+        setData(prev => prev ? { ...prev, ...coinGeckoData } : null);
+      });
+    }, 300000);
     
     return () => clearInterval(interval);
   }, []);
+
+  // Calculate market cap whenever W-Chain data changes
+  useEffect(() => {
+    if (wchainLoading || supplyLoading) {
+      setLoading(true);
+      return;
+    }
+
+    if (!wcoPrice?.price || !supplyData?.summary?.circulating_supply_wco) {
+      setLoading(false);
+      return;
+    }
+
+    const currentPrice = wcoPrice.price;
+    const circulatingSupply = parseFloat(supplyData.summary.circulating_supply_wco);
+    const calculatedMarketCap = currentPrice * circulatingSupply;
+
+    console.log('Market cap calculation:', {
+      price: currentPrice,
+      supply: circulatingSupply,
+      marketCap: calculatedMarketCap
+    });
+
+    setData(prev => ({
+      current_price: currentPrice,
+      market_cap: calculatedMarketCap,
+      total_volume: prev?.total_volume || 0,
+      circulating_supply: circulatingSupply,
+      price_change_24h: prev?.price_change_24h || 0,
+      price_change_percentage_24h: prev?.price_change_percentage_24h || 0,
+      ath: prev?.ath || 0,
+    }));
+
+    setLoading(false);
+  }, [wcoPrice, supplyData, wchainLoading, supplyLoading]);
 
   return { data, loading, error };
 };
