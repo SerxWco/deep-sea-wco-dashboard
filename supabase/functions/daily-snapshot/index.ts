@@ -46,39 +46,60 @@ async function collectMetrics(): Promise<MetricsData> {
   try {
     // Fetch W-Chain price data
     console.log('Fetching W-Chain price data...');
-    const priceResponse = await fetch('https://oracle.w-chain.com/api/wco/price');
+    const priceResponse = await fetch('https://oracle-w-chain.com/api/wco/price');
     let wcoPrice = 0;
     if (priceResponse.ok) {
       const priceData = await priceResponse.json();
       console.log('W-Chain price data:', priceData);
       wcoPrice = priceData.price || 0;
+    } else {
+      console.error('Failed to fetch W-Chain price data:', priceResponse.status, priceResponse.statusText);
     }
     
     // Fetch W-Chain supply data
     console.log('Fetching W-Chain supply data...');
-    const supplyResponse = await fetch('https://oracle.w-chain.com/api/wco/supply-info');
+    const supplyResponse = await fetch('https://oracle-w-chain.com/api/wco/supply-info');
     let circulatingSupply = 0;
     if (supplyResponse.ok) {
       const supplyData = await supplyResponse.json();
       console.log('W-Chain supply data:', supplyData);
       circulatingSupply = parseFloat(supplyData.summary?.circulating_supply_wco) || 0;
+    } else {
+      console.error('Failed to fetch W-Chain supply data:', supplyResponse.status, supplyResponse.statusText);
     }
     
-    // Calculate market cap using W-Chain data
-    metrics.marketCap = wcoPrice * circulatingSupply;
+    // Calculate market cap using W-Chain data only
+    const calculatedMarketCap = wcoPrice * circulatingSupply;
+    console.log('Market cap calculation:', {
+      price: wcoPrice,
+      supply: circulatingSupply,
+      marketCap: calculatedMarketCap
+    });
+    
+    metrics.marketCap = calculatedMarketCap;
     metrics.circulatingSupply = circulatingSupply;
     
     // Fetch CoinGecko for volume data only
     console.log('Fetching CoinGecko volume data...');
-    const coinGeckoResponse = await fetch('https://api.coingecko.com/api/v3/coins/wadzchain-token');
-    if (coinGeckoResponse.ok) {
-      const coinGeckoData = await coinGeckoResponse.json();
-      console.log('CoinGecko data:', coinGeckoData.market_data);
-      
-      metrics.totalVolume = coinGeckoData.market_data?.total_volume?.usd || 0;
+    try {
+      const coinGeckoResponse = await fetch('https://api.coingecko.com/api/v3/coins/wadzchain-token');
+      if (coinGeckoResponse.ok) {
+        const coinGeckoData = await coinGeckoResponse.json();
+        console.log('CoinGecko volume data:', coinGeckoData.market_data?.total_volume?.usd);
+        metrics.totalVolume = coinGeckoData.market_data?.total_volume?.usd || 0;
+      } else {
+        console.error('Failed to fetch CoinGecko data:', coinGeckoResponse.status, coinGeckoResponse.statusText);
+        metrics.totalVolume = 0;
+      }
+    } catch (coinGeckoError) {
+      console.error('CoinGecko API error:', coinGeckoError);
+      metrics.totalVolume = 0;
     }
   } catch (error) {
     console.error('Error fetching market data:', error);
+    metrics.marketCap = 0;
+    metrics.circulatingSupply = 0;
+    metrics.totalVolume = 0;
   }
   
   try {
@@ -132,6 +153,7 @@ async function collectMetrics(): Promise<MetricsData> {
 
 async function storeSnapshot(supabase: any, metrics: MetricsData) {
   console.log('Storing snapshot in database...');
+  console.log('Metrics to store:', metrics);
   
   // Get current date in CET timezone for snapshot_date
   const now = new Date();
@@ -142,32 +164,44 @@ async function storeSnapshot(supabase: any, metrics: MetricsData) {
     day: '2-digit' 
   }).format(now);
   
+  console.log('Snapshot date (CET):', cetDate);
+  console.log('Snapshot time (UTC):', now.toISOString());
+  
+  const insertData = {
+    snapshot_date: cetDate,
+    snapshot_time: now.toISOString(),
+    total_holders: metrics.totalHolders,
+    transactions_24h: metrics.transactions24h,
+    wco_moved_24h: metrics.wcoMoved24h,
+    market_cap: metrics.marketCap,
+    total_volume: metrics.totalVolume,
+    circulating_supply: metrics.circulatingSupply,
+    wco_burnt_total: metrics.wcoBurntTotal,
+    wco_burnt_24h: metrics.wcoBurnt24h,
+    active_wallets: metrics.activeWallets,
+    average_transaction_size: metrics.averageTransactionSize,
+    network_activity_rate: metrics.networkActivityRate,
+  };
+  
+  console.log('Data to insert:', insertData);
+  
   const { data, error } = await supabase
     .from('daily_metrics')
-    .upsert({
-      snapshot_date: cetDate,
-      snapshot_time: now.toISOString(),
-      total_holders: metrics.totalHolders,
-      transactions_24h: metrics.transactions24h,
-      wco_moved_24h: metrics.wcoMoved24h,
-      market_cap: metrics.marketCap,
-      total_volume: metrics.totalVolume,
-      circulating_supply: metrics.circulatingSupply,
-      wco_burnt_total: metrics.wcoBurntTotal,
-      wco_burnt_24h: metrics.wcoBurnt24h,
-      active_wallets: metrics.activeWallets,
-      average_transaction_size: metrics.averageTransactionSize,
-      network_activity_rate: metrics.networkActivityRate,
-    }, {
+    .upsert(insertData, {
       onConflict: 'snapshot_date'
     });
   
   if (error) {
-    console.error('Error storing snapshot:', error);
+    console.error('Database error details:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    });
     throw error;
   }
   
-  console.log('Snapshot stored successfully:', data);
+  console.log('Snapshot stored successfully. Rows affected:', data);
   return data;
 }
 
@@ -181,10 +215,12 @@ Deno.serve(async (req) => {
     console.log('Daily snapshot function triggered');
     
     // Initialize Supabase client
-    const supabase = createClient(
-      'https://lslysfupujprybfhkrdu.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzbHlzZnVwdWpwcnliZmhrcmR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc3OTc1MDAsImV4cCI6MjA3MzM3MzUwMH0.j0CnKBot5NtCG-lI8GMbPT3m5GhdruTa4KeDvpSZZE0'
-    );
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    console.log('Using Supabase URL:', SUPABASE_URL);
+    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
     // Collect all metrics
     const metrics = await collectMetrics();
