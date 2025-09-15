@@ -6,7 +6,6 @@ export interface DailyMetric {
   transactions24h: number;
   wcoMoved24h: number;
   marketCap: number;
-  totalVolume: number;
   circulatingSupply: number;
   wcoBurntTotal: number;
   wcoBurnt24h: number;
@@ -62,7 +61,6 @@ export const getLatestSnapshot = async (): Promise<DailyMetric | null> => {
       transactions24h: data.transactions_24h || 0,
       wcoMoved24h: Number(data.wco_moved_24h) || 0,
       marketCap: Number(data.market_cap) || 0,
-      totalVolume: Number(data.total_volume) || 0,
       circulatingSupply: Number(data.circulating_supply) || 0,
       wcoBurntTotal: Number(data.wco_burnt_total) || 0,
       wcoBurnt24h: Number(data.wco_burnt_24h) || 0,
@@ -96,7 +94,6 @@ export const getPreviousSnapshot = async (): Promise<DailyMetric | null> => {
       transactions24h: previousData.transactions_24h || 0,
       wcoMoved24h: Number(previousData.wco_moved_24h) || 0,
       marketCap: Number(previousData.market_cap) || 0,
-      totalVolume: Number(previousData.total_volume) || 0,
       circulatingSupply: Number(previousData.circulating_supply) || 0,
       wcoBurntTotal: Number(previousData.wco_burnt_total) || 0,
       wcoBurnt24h: Number(previousData.wco_burnt_24h) || 0,
@@ -167,10 +164,6 @@ const calculateChanges = (current: Omit<DailyMetric, 'date'>, previous: DailyMet
     marketCap: {
       change: current.marketCap - previous.marketCap,
       percentage: previous.marketCap > 0 ? ((current.marketCap - previous.marketCap) / previous.marketCap) * 100 : 0
-    },
-    totalVolume: {
-      change: current.totalVolume - previous.totalVolume,
-      percentage: previous.totalVolume > 0 ? ((current.totalVolume - previous.totalVolume) / previous.totalVolume) * 100 : 0
     },
     circulatingSupply: {
       change: current.circulatingSupply - previous.circulatingSupply,

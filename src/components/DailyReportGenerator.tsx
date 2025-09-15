@@ -16,8 +16,6 @@ interface ReportData {
   circulatingSupplyChange: number;
   marketCap: number;
   marketCapChange: number;
-  volume24h: number;
-  volumeChange: number;
   wcoBurnt: number;
   wcoBurntChange: number;
 }
@@ -53,8 +51,6 @@ export function DailyReportGenerator({ isOpen, onOpenChange, reportData }: Daily
 🪙 Circulating Supply: ${formatExactWCO(reportData.circulatingSupply)} ${formatReportChange(reportData.circulatingSupplyChange)} ${getChangeIndicator(reportData.circulatingSupplyChange)}
 
 📈 Market Cap: ${formatExactCurrency(reportData.marketCap)} ${formatReportChange(reportData.marketCapChange)} ${getChangeIndicator(reportData.marketCapChange)}
-
-📊 Volume: ${formatExactCurrency(reportData.volume24h)} ${formatReportChange(reportData.volumeChange)} ${getChangeIndicator(reportData.volumeChange)}
 
 🔥 WCO Burnt: ${formatExactWCO(reportData.wcoBurnt)} ${formatReportChange(reportData.wcoBurntChange)} ${getChangeIndicator(reportData.wcoBurntChange)}
 

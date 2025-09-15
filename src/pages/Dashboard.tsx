@@ -50,7 +50,6 @@ export default function Dashboard() {
           averageTransactionSize: networkStats.averageTransactionSize,
           networkActivityRate: networkStats.networkActivityRate,
           marketCap: data.market_cap,
-          totalVolume: data.total_volume,
           circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
           wcoBurntTotal: burnData.totalBurnt,
           wcoBurnt24h: burnData.burnt24h || 0
@@ -73,7 +72,6 @@ export default function Dashboard() {
         averageTransactionSize: networkStats.averageTransactionSize,
         networkActivityRate: networkStats.networkActivityRate,
         marketCap: data.market_cap,
-        totalVolume: data.total_volume,
         circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
         wcoBurntTotal: burnData.totalBurnt,
         wcoBurnt24h: burnData.burnt24h || 0
@@ -96,8 +94,6 @@ export default function Dashboard() {
       circulatingSupplyChange: dailyComparison?.circulatingSupply?.change || 0,
       marketCap: data.market_cap,
       marketCapChange: dailyComparison?.marketCap?.change || 0,
-      volume24h: data.total_volume,
-      volumeChange: dailyComparison?.totalVolume?.change || 0,
       wcoBurnt: burnData.totalBurnt,
       wcoBurntChange: dailyComparison?.wcoBurntTotal?.change || 0
     };
