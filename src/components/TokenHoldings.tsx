@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatNumber, formatCurrency } from '@/utils/formatters';
 import { useWCOMarketData } from '@/hooks/useWCOMarketData';
 import { useWChainPriceAPI } from '@/hooks/useWChainPriceAPI';
+import { useOG88Price } from '@/hooks/useOG88Price';
 
 interface TokenHoldingsProps {
   balances: TokenBalance[];
@@ -15,6 +16,7 @@ interface TokenHoldingsProps {
 export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
   const { data: wcoMarketData } = useWCOMarketData();
   const { wcoPrice, wavePrice } = useWChainPriceAPI();
+  const { og88Price } = useOG88Price();
 
   const getTokenPrice = (token: any): number => {
     // Check if this is WCO token
@@ -26,6 +28,9 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
     const isWAVE = token.symbol?.toUpperCase() === 'WAVE' ||
                    token.name?.toLowerCase().includes('wave');
     
+    // Check if this is OG88 token (by contract address)
+    const isOG88 = token.address?.toLowerCase() === '0xd1841fc048b488d92fdf73624a2128d10a847e88';
+    
     // Use W-Chain API prices first (more accurate for native tokens)
     if (isWCO && wcoPrice?.price) {
       return wcoPrice.price;
@@ -33,6 +38,11 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
     
     if (isWAVE && wavePrice?.price) {
       return wavePrice.price;
+    }
+    
+    // Use OG88 price from Railway API
+    if (isOG88 && og88Price?.price) {
+      return og88Price.price;
     }
     
     // Fallback to CoinGecko for WCO if W-Chain API unavailable
