@@ -17,7 +17,6 @@ interface PriceChange {
 }
 
 const STORAGE_KEY = 'wchain_price_history';
-const COLLECTION_INTERVAL = 15 * 60 * 1000; // 15 minutes
 const MAX_HISTORY_DAYS = 7;
 const MAX_ENTRIES = (MAX_HISTORY_DAYS * 24 * 60) / 15; // 7 days of 15-minute intervals
 
@@ -83,81 +82,42 @@ export const usePriceHistory = () => {
     loadHistoryData();
   }, []);
 
-  // Save to both Supabase and localStorage
-  const saveToStorage = useCallback(async (history: PriceHistoryEntry[]) => {
-    try {
-      // Keep only recent entries to prevent storage bloat
-      const cutoffTime = Date.now() - (MAX_HISTORY_DAYS * 24 * 60 * 60 * 1000);
-      const recentHistory = history
-        .filter(entry => entry.timestamp > cutoffTime)
-        .slice(-MAX_ENTRIES)
-        .sort((a, b) => a.timestamp - b.timestamp);
-      
-      // Save to localStorage for fast access
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(recentHistory));
-      setWcoHistory(recentHistory);
-      setWaveHistory(recentHistory);
-      setOG88History(recentHistory);
-    } catch (error) {
-      console.warn('Failed to save price history to localStorage:', error);
-    }
-  }, []);
+  // Refresh data from Supabase periodically (server handles collection)
+  useEffect(() => {
+    const refreshData = async () => {
+      try {
+        const { data: supabaseData, error } = await supabase
+          .from('price_history')
+          .select('timestamp, wco_price, wave_price, og88_price, source')
+          .order('timestamp', { ascending: true })
+          .limit(MAX_ENTRIES);
 
-  // Save new price entry to Supabase
-  const savePriceToSupabase = useCallback(async (entry: PriceHistoryEntry) => {
-    try {
-      const { error } = await supabase
-        .from('price_history')
-        .insert({
-          timestamp: new Date(entry.timestamp).toISOString(),
-          wco_price: entry.wco_price,
-          wave_price: entry.wave_price,
-          og88_price: entry.og88_price || null,
-          source: entry.source
-        });
+        if (!error && supabaseData && supabaseData.length > 0) {
+          const formattedData: PriceHistoryEntry[] = supabaseData.map(entry => ({
+            timestamp: new Date(entry.timestamp).getTime(),
+            wco_price: parseFloat(String(entry.wco_price || '0')),
+            wave_price: parseFloat(String(entry.wave_price || '0')),
+            og88_price: entry.og88_price ? parseFloat(String(entry.og88_price)) : undefined,
+            source: entry.source as 'w-chain-api'
+          })).filter(entry => entry.wco_price > 0 && entry.wave_price > 0);
 
-      if (error) {
-        console.warn('Failed to save price data to Supabase:', error);
+          setWcoHistory(formattedData);
+          setWaveHistory(formattedData);
+          setOG88History(formattedData);
+          
+          // Cache in localStorage for faster subsequent loads
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(formattedData));
+        }
+      } catch (error) {
+        console.warn('Failed to refresh price history from Supabase:', error);
       }
-    } catch (error) {
-      console.warn('Error saving to Supabase:', error);
-    }
-  }, []);
-
-  // Collect price data
-  const collectPriceData = useCallback(() => {
-    if (!wcoPrice?.price || !wavePrice?.price) return;
-
-    const newEntry: PriceHistoryEntry = {
-      timestamp: Date.now(),
-      wco_price: wcoPrice.price,
-      wave_price: wavePrice.price,
-      og88_price: og88Price?.price,
-      source: 'w-chain-api'
     };
 
-    // Save to Supabase first
-    savePriceToSupabase(newEntry);
-
-    setWcoHistory(prev => {
-      const updated = [...prev, newEntry];
-      saveToStorage(updated);
-      return updated.slice(-MAX_ENTRIES);
-    });
-  }, [wcoPrice?.price, wavePrice?.price, og88Price?.price, saveToStorage, savePriceToSupabase]);
-
-  // Set up collection interval
-  useEffect(() => {
-    // Collect immediately if we have prices
-    if (wcoPrice?.price && wavePrice?.price) {
-      collectPriceData();
-    }
-
-    // Set up interval for regular collection
-    const interval = setInterval(collectPriceData, COLLECTION_INTERVAL);
+    // Refresh every 5 minutes to get latest server-collected data
+    const interval = setInterval(refreshData, 5 * 60 * 1000);
     
     return () => clearInterval(interval);
-  }, [collectPriceData]);
+  }, []);
 
   // Calculate price changes
   const getLatestChange = useCallback((token: 'wco' | 'wave' | 'og88'): PriceChange | null => {
@@ -206,6 +166,6 @@ export const usePriceHistory = () => {
     og88History,
     getLatestChange,
     getChartData,
-    isCollecting: !!wcoPrice?.price && !!wavePrice?.price
+    isCollecting: true // Server-side collection is always active
   };
 };
