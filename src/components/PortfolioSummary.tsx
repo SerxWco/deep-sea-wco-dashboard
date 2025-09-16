@@ -3,6 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, TrendingUp, DollarSign } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatters';
+import { useWCOMarketData } from '@/hooks/useWCOMarketData';
+import { useWChainPriceAPI } from '@/hooks/useWChainPriceAPI';
+import { useOG88Price } from '@/hooks/useOG88Price';
 
 interface PortfolioSummaryProps {
   balances: TokenBalance[];
@@ -17,7 +20,35 @@ export const PortfolioSummary = ({
   onRefresh, 
   loading 
 }: PortfolioSummaryProps) => {
-  const totalUsdValue = balances.reduce((sum, balance) => sum + (balance.usdValue || 0), 0);
+  const { data: wcoMarketData } = useWCOMarketData();
+  const { wcoPrice, wavePrice } = useWChainPriceAPI();
+  const { og88Price } = useOG88Price();
+
+  const getTokenPrice = (token: any): number => {
+    const isWCO = token.symbol?.toUpperCase() === 'WCO' || 
+                  token.name?.toLowerCase().includes('w coin') ||
+                  token.name?.toLowerCase().includes('wadzcoin');
+    const isWAVE = token.symbol?.toUpperCase() === 'WAVE' ||
+                   token.name?.toLowerCase().includes('wave');
+    const isOG88 = token.address?.toLowerCase() === '0xd1841fc048b488d92fdf73624a2128d10a847e88';
+
+    if (isWCO && wcoPrice?.price) return wcoPrice.price;
+    if (isWAVE && wavePrice?.price) return wavePrice.price;
+    if (isOG88 && og88Price?.price) return og88Price.price;
+    if (isWCO && wcoMarketData?.current_price) return wcoMarketData.current_price;
+    if (token.exchange_rate) return parseFloat(token.exchange_rate);
+    return 0;
+  };
+
+  const getTokenUsdValue = (tokenBalance: TokenBalance) => {
+    const priceValue = getTokenPrice(tokenBalance.token);
+    if (typeof priceValue === 'number' && priceValue > 0) {
+      return priceValue * tokenBalance.balanceInEth;
+    }
+    return tokenBalance.usdValue || 0;
+  };
+
+  const totalUsdValue = balances.reduce((sum, balance) => sum + getTokenUsdValue(balance), 0);
 
   // Calculate 24h performance (placeholder for now - would need historical data)
   const performance24h = 0; // This would come from comparing with yesterday's snapshot

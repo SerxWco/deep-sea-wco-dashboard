@@ -19,7 +19,12 @@ export const useOG88Price = (): UseOG88PriceReturn => {
   const fetchOG88Price = async () => {
     try {
       setError(null);
-      const response = await fetch('https://lslysfupujprybfhkrdu.supabase.co/functions/v1/og88-price-proxy');
+      // Try Railway API first
+      let response = await fetch('https://og88-price-api-production.up.railway.app/price');
+      // Fallback to Supabase Edge Function proxy if Railway is unavailable
+      if (!response.ok) {
+        response = await fetch('https://lslysfupujprybfhkrdu.supabase.co/functions/v1/og88-price-proxy');
+      }
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
