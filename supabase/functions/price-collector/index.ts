@@ -49,11 +49,22 @@ async function collectPrices(): Promise<PriceData> {
   try {
     // Fetch OG88 price (optional)
     console.log('Fetching OG88 price...');
-    const og88Response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=og88&vs_currencies=usd');
+    const og88Response = await fetch('https://og88-price-api-production.up.railway.app/price');
     if (og88Response.ok) {
       const og88Data = await og88Response.json();
       console.log('OG88 price data:', og88Data);
-      prices.og88_price = og88Data?.og88?.usd || undefined;
+      
+      // Handle different possible response formats
+      let og88Price: number | undefined;
+      if (typeof og88Data === 'number') {
+        og88Price = og88Data;
+      } else if (og88Data.price && typeof og88Data.price === 'number') {
+        og88Price = og88Data.price;
+      } else if (og88Data.value && typeof og88Data.value === 'number') {
+        og88Price = og88Data.value;
+      }
+      
+      prices.og88_price = og88Price;
     } else {
       console.log('OG88 price not available or failed to fetch');
     }
