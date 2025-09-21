@@ -1,8 +1,7 @@
 import { TableCell, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ExternalLink, Copy } from 'lucide-react';
-import { WChainToken, TokenBalance } from '@/types/token';
+import { WChainToken } from '@/types/token';
 import { formatNumber } from '@/utils/formatters';
 import { useToast } from '@/hooks/use-toast';
 import { useWCOMarketData } from '@/hooks/useWCOMarketData';
@@ -11,11 +10,9 @@ import { useOG88Price } from '@/hooks/useOG88Price';
 
 interface TokenListItemProps {
   token: WChainToken;
-  balance?: TokenBalance;
-  hasWallet: boolean;
 }
 
-export const TokenListItem = ({ token, balance, hasWallet }: TokenListItemProps) => {
+export const TokenListItem = ({ token }: TokenListItemProps) => {
   const { toast } = useToast();
   const { data: wcoMarketData } = useWCOMarketData();
   const { wcoPrice, wavePrice } = useWChainPriceAPI();
@@ -129,28 +126,6 @@ export const TokenListItem = ({ token, balance, hasWallet }: TokenListItemProps)
             : <span className="text-muted-foreground">--</span>
           }
         </div>
-      </TableCell>
-
-      {/* Balance */}
-      <TableCell>
-        {hasWallet ? (
-          balance ? (
-            <div>
-              <div className="font-medium text-foreground">
-                {formatNumber(balance.balanceInEth)} {token.symbol}
-              </div>
-              {balance.usdValue && (
-                <div className="text-sm text-muted-foreground">
-                  ≈ ${formatNumber(balance.usdValue)}
-                </div>
-              )}
-            </div>
-          ) : (
-            <span className="text-muted-foreground text-sm">0</span>
-          )
-        ) : (
-          <span className="text-muted-foreground text-sm">-</span>
-        )}
       </TableCell>
 
       {/* Holders */}

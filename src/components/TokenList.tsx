@@ -2,26 +2,16 @@ import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TokenListItem } from './TokenListItem';
-import { WChainToken, TokenBalance } from '@/types/token';
+import { WChainToken } from '@/types/token';
 
 interface TokenListProps {
   tokens: WChainToken[];
-  balances: TokenBalance[];
   loading: boolean;
-  hasWallet: boolean;
   showOnlyOwned: boolean;
 }
 
-export const TokenList = ({ tokens, balances, loading, hasWallet, showOnlyOwned }: TokenListProps) => {
-  // Create a map for quick balance lookup
-  const balanceMap = new Map(
-    balances.map(balance => [balance.token.address.toLowerCase(), balance])
-  );
-
-  // Filter tokens based on ownership if required
-  const displayTokens = showOnlyOwned && hasWallet
-    ? tokens.filter(token => balanceMap.has(token.address.toLowerCase()))
-    : tokens;
+export const TokenList = ({ tokens, loading, showOnlyOwned }: TokenListProps) => {
+  const displayTokens = tokens;
 
   if (loading) {
     return (
@@ -53,16 +43,11 @@ export const TokenList = ({ tokens, balances, loading, hasWallet, showOnlyOwned 
     return (
       <Card className="glass-ocean">
         <CardHeader>
-          <CardTitle className="text-foreground">
-            {showOnlyOwned ? 'No Owned Tokens' : 'No Tokens Found'}
-          </CardTitle>
+          <CardTitle className="text-foreground">No Tokens Found</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            {showOnlyOwned 
-              ? 'You don\'t own any tokens yet. Connect your wallet to see your holdings.'
-              : 'No tokens match your current search criteria.'
-            }
+            No tokens match your current search criteria.
           </p>
         </CardContent>
       </Card>
@@ -73,9 +58,7 @@ export const TokenList = ({ tokens, balances, loading, hasWallet, showOnlyOwned 
     <Card className="glass-ocean">
       <CardHeader>
         <CardTitle className="text-foreground flex items-center justify-between">
-          <span>
-            {showOnlyOwned ? 'Your Tokens' : 'All W Chain Tokens'}
-          </span>
+          <span>All W Chain Tokens</span>
           <span className="text-sm font-normal text-muted-foreground">
             {displayTokens.length} token{displayTokens.length !== 1 ? 's' : ''}
           </span>
@@ -89,9 +72,6 @@ export const TokenList = ({ tokens, balances, loading, hasWallet, showOnlyOwned 
                 <TableHead className="text-muted-foreground">Token</TableHead>
                 <TableHead className="text-muted-foreground">Contract</TableHead>
                 <TableHead className="text-muted-foreground">Price</TableHead>
-                <TableHead className="text-muted-foreground">
-                  {hasWallet ? 'Balance' : 'Balance'}
-                </TableHead>
                 <TableHead className="text-muted-foreground">Holders</TableHead>
                 <TableHead className="text-muted-foreground">Actions</TableHead>
               </TableRow>
@@ -101,8 +81,6 @@ export const TokenList = ({ tokens, balances, loading, hasWallet, showOnlyOwned 
                 <TokenListItem
                   key={token.address}
                   token={token}
-                  balance={balanceMap.get(token.address.toLowerCase())}
-                  hasWallet={hasWallet}
                 />
               ))}
             </TableBody>

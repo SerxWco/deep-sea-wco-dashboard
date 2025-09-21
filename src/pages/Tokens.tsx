@@ -1,6 +1,4 @@
 import { useWChainTokens } from '@/hooks/useWChainTokens';
-import { useTokenBalances } from '@/hooks/useTokenBalances';
-import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { TokenSearch } from '@/components/TokenSearch';
 import { TokenStats } from '@/components/TokenStats';
 import { TokenList } from '@/components/TokenList';
@@ -8,14 +6,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Coins } from 'lucide-react';
 
 export default function Tokens() {
-  const { 
-    isConnected, 
-    walletInfo, 
-    connectWallet, 
-    isConnecting, 
-    error: walletError 
-  } = useWalletConnection();
-
   const {
     tokens,
     loading: tokensLoading,
@@ -26,28 +16,10 @@ export default function Tokens() {
     filteredTokens
   } = useWChainTokens();
 
-  const {
-    balances,
-    loading: balancesLoading,
-    error: balancesError,
-    refetchBalances
-  } = useTokenBalances(tokens, walletInfo?.address || null);
-
   const handleRefresh = () => {
     refreshTokens();
-    if (isConnected) {
-      refetchBalances();
-    }
   };
 
-  // Filter tokens based on ownership if the filter is enabled
-  const displayTokens = filters.showOnlyOwned && isConnected
-    ? filteredTokens.filter(token => 
-        balances.some(balance => 
-          balance.token.address.toLowerCase() === token.address.toLowerCase()
-        )
-      )
-    : filteredTokens;
 
   return (
     <div className="p-6 space-y-6">
@@ -64,11 +36,11 @@ export default function Tokens() {
 
 
       {/* Error Alerts */}
-      {(walletError || tokensError || balancesError) && (
+      {tokensError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            {walletError || tokensError || balancesError}
+            {tokensError}
           </AlertDescription>
         </Alert>
       )}
@@ -83,16 +55,14 @@ export default function Tokens() {
       <TokenSearch
         filters={filters}
         onFiltersChange={setFilters}
-        hasWalletConnected={isConnected}
+        hasWalletConnected={false}
         onRefresh={handleRefresh}
       />
 
       {/* Token List */}
       <TokenList
-        tokens={displayTokens}
-        balances={balances}
-        loading={tokensLoading || (isConnected && balancesLoading)}
-        hasWallet={isConnected}
+        tokens={filteredTokens}
+        loading={tokensLoading}
         showOnlyOwned={filters.showOnlyOwned}
       />
     </div>
