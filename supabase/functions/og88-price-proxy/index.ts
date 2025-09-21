@@ -33,6 +33,9 @@ serve(async (req) => {
     let price: number;
     if (typeof data === 'number') {
       price = data;
+    } else if (data.price_usd && typeof data.price_usd === 'number') {
+      // Handle the actual API format: {"price_usd": 0.06533809102754166}
+      price = data.price_usd;
     } else if (data.price && typeof data.price === 'number') {
       price = data.price;
     } else if (data.value && typeof data.value === 'number') {
@@ -43,7 +46,7 @@ serve(async (req) => {
     }
 
     const responseData = {
-      price,
+      price_usd: price,
       timestamp: Date.now()
     };
     
