@@ -1,7 +1,6 @@
 import { useWChainPriceAPI } from "@/hooks/useWChainPriceAPI";
 import { usePriceHistory } from "@/hooks/usePriceHistory";
 import { CryptoMetricCard } from "@/components/CryptoMetricCard";
-import { WavePriceChart } from "@/components/WavePriceChart";
 import { formatCurrency, formatPercentage } from "@/utils/formatters";
 import { Waves, TrendingUp, BarChart3, Clock } from "lucide-react";
 
@@ -61,16 +60,6 @@ export default function Wave() {
         />
       </div>
 
-      {/* Price Chart */}
-      <div className="glass-ocean rounded-2xl p-6 border border-border/30">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-foreground">WAVE Price History</h2>
-          <div className="text-sm text-muted-foreground">
-            Updated every 15 minutes
-          </div>
-        </div>
-        <WavePriceChart />
-      </div>
 
       {/* Additional Info */}
       <div className="glass-ocean rounded-2xl p-6 border border-border/30">
