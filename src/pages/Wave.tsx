@@ -2,7 +2,7 @@ import { useWChainPriceAPI } from "@/hooks/useWChainPriceAPI";
 import { usePriceHistory } from "@/hooks/usePriceHistory";
 import { CryptoMetricCard } from "@/components/CryptoMetricCard";
 import { formatCurrency, formatPercentage } from "@/utils/formatters";
-import { Waves, TrendingUp, BarChart3, Clock } from "lucide-react";
+import { Waves, TrendingUp } from "lucide-react";
 
 export default function Wave() {
   const { wavePrice, loading: priceLoading } = useWChainPriceAPI();
@@ -44,19 +44,6 @@ export default function Wave() {
             isPositive: waveChange.percentage >= 0
           } : undefined}
           icon={<TrendingUp className="h-5 w-5" />}
-        />
-        
-        <CryptoMetricCard
-          title="Data Points"
-          value={waveHistory.length.toString()}
-          icon={<BarChart3 className="h-5 w-5" />}
-        />
-        
-        <CryptoMetricCard
-          title="Collection Status"
-          value="Active"
-          icon={<Clock className="h-5 w-5" />}
-          className="border-success/30"
         />
       </div>
 
