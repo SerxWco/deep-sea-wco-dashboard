@@ -24,7 +24,7 @@ export interface TokenBalance {
 export interface TokenListFilters {
   search: string;
   showOnlyOwned: boolean;
-  sortBy: 'name' | 'symbol' | 'balance' | 'holders';
+  sortBy: 'name' | 'symbol' | 'balance' | 'holders' | 'price' | 'usd_value';
   sortOrder: 'asc' | 'desc';
 }
 

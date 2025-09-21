@@ -1,12 +1,15 @@
-import { TokenBalance } from '@/types/token';
+import { TokenBalance, TokenListFilters } from '@/types/token';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { formatNumber, formatCurrency } from '@/utils/formatters';
 import { useWCOMarketData } from '@/hooks/useWCOMarketData';
 import { useWChainPriceAPI } from '@/hooks/useWChainPriceAPI';
 import { useOG88Price } from '@/hooks/useOG88Price';
+import { ChevronUp, ChevronDown } from 'lucide-react';
+import { useState, useMemo } from 'react';
 
 interface TokenHoldingsProps {
   balances: TokenBalance[];
@@ -17,6 +20,9 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
   const { data: wcoMarketData } = useWCOMarketData();
   const { wcoPrice, wavePrice } = useWChainPriceAPI();
   const { og88Price } = useOG88Price();
+  
+  const [sortBy, setSortBy] = useState<TokenListFilters['sortBy']>('usd_value');
+  const [sortOrder, setSortOrder] = useState<TokenListFilters['sortOrder']>('desc');
 
   const getTokenPrice = (token: any): number => {
     // Check if this is WCO token
@@ -64,6 +70,66 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
       return priceValue * tokenBalance.balanceInEth;
     }
     return tokenBalance.usdValue || 0;
+  };
+
+  const handleSort = (column: TokenListFilters['sortBy']) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('desc');
+    }
+  };
+
+  const sortedBalances = useMemo(() => {
+    return [...balances].sort((a, b) => {
+      let valueA: number | string = 0;
+      let valueB: number | string = 0;
+
+      switch (sortBy) {
+        case 'name':
+          valueA = a.token.name.toLowerCase();
+          valueB = b.token.name.toLowerCase();
+          break;
+        case 'symbol':
+          valueA = a.token.symbol.toLowerCase();
+          valueB = b.token.symbol.toLowerCase();
+          break;
+        case 'balance':
+          valueA = a.balanceInEth;
+          valueB = b.balanceInEth;
+          break;
+        case 'price':
+          valueA = getTokenPrice(a.token);
+          valueB = getTokenPrice(b.token);
+          break;
+        case 'usd_value':
+          valueA = getTokenUsdValue(a);
+          valueB = getTokenUsdValue(b);
+          break;
+        case 'holders':
+          valueA = a.token.holders_count || 0;
+          valueB = b.token.holders_count || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (typeof valueA === 'string') {
+        return sortOrder === 'asc' 
+          ? valueA.localeCompare(valueB as string)
+          : (valueB as string).localeCompare(valueA);
+      } else {
+        return sortOrder === 'asc' 
+          ? (valueA as number) - (valueB as number)
+          : (valueB as number) - (valueA as number);
+      }
+    });
+  }, [balances, sortBy, sortOrder, wcoPrice, wavePrice, og88Price, wcoMarketData]);
+
+  const getSortIcon = (column: TokenListFilters['sortBy']) => {
+    if (sortBy !== column) return null;
+    return sortOrder === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />;
   };
 
   if (loading) {
@@ -122,14 +188,50 @@ export const TokenHoldings = ({ balances, loading }: TokenHoldingsProps) => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Token</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead className="text-right">Balance</TableHead>
-                <TableHead className="text-right">USD Value</TableHead>
+                <TableHead>
+                  <Button 
+                    variant="ghost" 
+                    className="h-auto p-0 font-semibold text-left justify-start"
+                    onClick={() => handleSort('name')}
+                  >
+                    Token
+                    {getSortIcon('name')}
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button 
+                    variant="ghost" 
+                    className="h-auto p-0 font-semibold text-left justify-start"
+                    onClick={() => handleSort('price')}
+                  >
+                    Price
+                    {getSortIcon('price')}
+                  </Button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <Button 
+                    variant="ghost" 
+                    className="h-auto p-0 font-semibold text-right justify-end"
+                    onClick={() => handleSort('balance')}
+                  >
+                    Balance
+                    {getSortIcon('balance')}
+                  </Button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <Button 
+                    variant="ghost" 
+                    className="h-auto p-0 font-semibold text-right justify-end"
+                    onClick={() => handleSort('usd_value')}
+                  >
+                    USD Value
+                    {getSortIcon('usd_value')}
+                  </Button>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {balances.map((tokenBalance) => (
+              {sortedBalances.map((tokenBalance) => (
                 <TableRow key={tokenBalance.token.address}>
                   <TableCell className="font-medium">
                     <div className="flex items-center space-x-3">
