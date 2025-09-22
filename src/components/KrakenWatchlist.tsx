@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Clock, TrendingUp, TrendingDown, ArrowRightLeft } from 'lucide-react';
+import { RefreshCw, Clock, TrendingUp, TrendingDown, ArrowRightLeft, ExternalLink } from 'lucide-react';
 import { useKrakenWatchlist } from '@/hooks/useKrakenWatchlist';
 import { KrakenTransaction } from '@/types/kraken';
 import { formatNumber } from '@/utils/formatters';
@@ -19,6 +19,15 @@ export const KrakenWatchlist = () => {
     const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
     return new Date(tx.timestamp) > cutoff;
   });
+
+  // Helper functions for explorer links
+  const getAddressExplorerUrl = (address: string): string => {
+    return `https://scan.w-chain.com/address/${address}`;
+  };
+
+  const getTxExplorerUrl = (hash: string): string => {
+    return `https://scan.w-chain.com/tx/${hash}`;
+  };
 
   // Format address for display
   const formatAddress = (address: string): string => {
@@ -207,19 +216,43 @@ export const KrakenWatchlist = () => {
                     </div>
                     
                     <div className="text-sm font-mono">
-                      <span className="text-muted-foreground">
+                      <a
+                        href={getAddressExplorerUrl(tx.from)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1"
+                      >
                         {formatAddress(tx.from)}
-                      </span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
                       <span className="mx-2 text-muted-foreground">→</span>
-                      <span className="text-muted-foreground">
+                      <a
+                        href={getAddressExplorerUrl(tx.to)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1"
+                      >
                         {formatAddress(tx.to)}
-                      </span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
                     </div>
                   </div>
                   
                   <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between">
-                    <div className="text-lg font-bold text-primary">
-                      {formatNumber(tx.amount)} WCO
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <div className="text-lg font-bold text-primary">
+                        {formatNumber(tx.amount)} WCO
+                      </div>
+                      <a
+                        href={getTxExplorerUrl(tx.hash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1 font-mono"
+                        title="View transaction on explorer"
+                      >
+                        {tx.hash.slice(0, 10)}...{tx.hash.slice(-6)}
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {tx.classification.description}
