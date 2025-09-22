@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface WalletData {
   address: string;
@@ -116,13 +117,14 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   // Function to fetch a specific wallet by address
   const fetchSpecificWallet = async (address: string): Promise<WalletData | null> => {
     try {
-      const response = await fetch(`https://scan.w-chain.com/api/v2/addresses/${address}`);
-      if (!response.ok) {
-        console.warn(`Failed to fetch wallet ${address}: ${response.status}`);
+      const { data: account, error } = await supabase.functions.invoke('wchain-address-proxy', {
+        body: { address }
+      });
+      
+      if (error) {
+        console.warn(`Failed to fetch wallet ${address}:`, error);
         return null;
       }
-
-      const account = await response.json();
       if (!account) return null;
 
       const balanceWei = parseFloat(account.coin_balance) || 0;
@@ -155,19 +157,22 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
       }
       
       let allWallets: WalletData[] = isLoadMore ? wallets : [];
-      const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
-      let url = `${baseUrl}?items_count=50`;
+      let params: any = { items_count: 50 };
       let keepFetching = true;
 
       while (keepFetching) {
-        console.log(`Fetching URL:`, url);
-        const response = await fetch(url);
+        console.log(`Fetching addresses with params:`, params);
+        const { data: result, error } = await supabase.functions.invoke('wchain-address-proxy', {
+          body: { 
+            address: '', // Empty address means fetch addresses list
+            endpoint: 'list',
+            params 
+          }
+        });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        if (error) {
+          throw new Error(`HTTP error: ${error.message}`);
         }
-
-        const result = await response.json();
         
         if (!result || !result.items || !Array.isArray(result.items)) {
           throw new Error('Invalid data format from W-Chain API');
@@ -197,8 +202,7 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         
         // Check if more pages exist
         if (result.next_page_params) {
-          const params = new URLSearchParams(result.next_page_params).toString();
-          url = `${baseUrl}?items_count=50&${params}`;
+          params = { items_count: 50, ...result.next_page_params };
         } else {
           keepFetching = false;
         }

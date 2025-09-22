@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { WChainToken, WChainTokensResponse, TokenListFilters } from '@/types/token';
+import { supabase } from '@/integrations/supabase/client';
 
 interface UseWChainTokensReturn {
   tokens: WChainToken[];
@@ -11,7 +12,7 @@ interface UseWChainTokensReturn {
   filteredTokens: WChainToken[];
 }
 
-const API_BASE_URL = 'https://scan.w-chain.com/api/v2';
+// Using Supabase Edge Functions proxy to bypass CORS
 
 export const useWChainTokens = (): UseWChainTokensReturn => {
   const [tokens, setTokens] = useState<WChainToken[]>([]);
@@ -40,21 +41,22 @@ export const useWChainTokens = (): UseWChainTokensReturn => {
       const maxPages = 10; // Limit to prevent infinite loops
       
       do {
-        const url = new URL(`${API_BASE_URL}/tokens`);
+        const params: any = {};
         if (nextPageParams) {
           Object.entries(nextPageParams).forEach(([key, value]) => {
             if (value !== null && value !== undefined) {
-              url.searchParams.append(key, String(value));
+              params[key] = String(value);
             }
           });
         }
 
-        const response = await fetch(url.toString());
-        if (!response.ok) {
-          throw new Error(`Failed to fetch tokens: ${response.statusText}`);
+        const { data, error } = await supabase.functions.invoke('wchain-tokens-proxy', {
+          body: { params }
+        });
+        
+        if (error) {
+          throw new Error(`Failed to fetch tokens: ${error.message}`);
         }
-
-      const data: WChainTokensResponse = await response.json();
       // Deduplicate tokens by address to avoid duplicates across pages
       const newTokens = data.items.filter(
         token => !allTokens.some(existing => 

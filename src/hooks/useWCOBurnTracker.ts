@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface BurnTransaction {
   hash: string;
@@ -42,28 +43,31 @@ export const useWCOBurnTracker = () => {
       console.log('Fetching burn address balance...');
       
       // Fetch burn address balance directly
-      const balanceResponse = await fetch(
-        `https://scan.w-chain.com/api/v2/addresses/${BURN_ADDRESS}`
-      );
+      const { data: balanceResult, error: balanceError } = await supabase.functions.invoke('wchain-address-proxy', {
+        body: {
+          address: BURN_ADDRESS
+        }
+      });
 
-      if (!balanceResponse.ok) {
-        throw new Error(`Failed to fetch burn address balance: ${balanceResponse.status}`);
+      if (balanceError) {
+        throw new Error(`Failed to fetch burn address balance: ${balanceError.message}`);
       }
-
-      const balanceResult = await balanceResponse.json();
       const totalBurnt = parseFloat(balanceResult.coin_balance || '0') / 1e18; // Convert from Wei to WCO
 
       // Fetch recent transactions to burn address for 24h tracking
       console.log('Fetching recent burn transactions...');
-      const txResponse = await fetch(
-        `https://scan.w-chain.com/api/v2/addresses/${BURN_ADDRESS}/transactions?filter=to`
-      );
+      const { data: txResult, error: txError } = await supabase.functions.invoke('wchain-address-proxy', {
+        body: {
+          address: BURN_ADDRESS,
+          endpoint: 'transactions',
+          params: { filter: 'to' }
+        }
+      });
 
       let burnt24h = 0;
       let burnt24h48h = 0; // Previous 24h for comparison
 
-      if (txResponse.ok) {
-        const txResult = await txResponse.json();
+      if (!txError && txResult) {
         const transactions = txResult.items || [];
 
         // Calculate 24h burnt and previous 24h for comparison

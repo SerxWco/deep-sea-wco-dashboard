@@ -7,6 +7,7 @@ import {
   TRANSACTION_CLASSIFICATIONS,
   TransactionClassification 
 } from '@/types/kraken';
+import { supabase } from '@/integrations/supabase/client';
 
 const KRAKEN_MIN_BALANCE = 5000000; // 5M WCO
 const LARGE_TRANSACTION_THRESHOLD = 1000000; // 1M WCO
@@ -80,16 +81,18 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
   // Fetch transactions for a specific Kraken wallet
   const fetchWalletTransactions = async (krakenWallet: KrakenWallet): Promise<KrakenTransaction[]> => {
     try {
-      const response = await fetch(
-        `https://scan.w-chain.com/api/v2/addresses/${krakenWallet.address}/transactions?limit=20`
-      );
+      const { data, error } = await supabase.functions.invoke('wchain-address-proxy', {
+        body: {
+          address: krakenWallet.address,
+          endpoint: 'transactions',
+          params: { limit: 20 }
+        }
+      });
       
-      if (!response.ok) {
-        console.warn(`Failed to fetch transactions for ${krakenWallet.address}: ${response.status}`);
+      if (error) {
+        console.warn(`Failed to fetch transactions for ${krakenWallet.address}:`, error);
         return [];
       }
-
-      const data = await response.json();
       
       if (!data.items || !Array.isArray(data.items)) {
         return [];

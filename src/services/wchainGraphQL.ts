@@ -1,4 +1,6 @@
 // GraphQL service for W-Chain API
+import { supabase } from '@/integrations/supabase/client';
+
 interface GraphQLResponse<T = any> {
   data?: T;
   errors?: Array<{
@@ -49,27 +51,20 @@ class WChainGraphQLService {
 
   constructor() {
     this.baseUrl = 'https://scan.w-chain.com';
-    this.graphqlEndpoint = `${this.baseUrl}/api/graphql`;
+    this.graphqlEndpoint = `${this.baseUrl}/api/graphql`; // Will use proxy
   }
 
   private async query<T>(query: string, variables?: Record<string, any>): Promise<T> {
-    const response = await fetch(this.graphqlEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
+    const { data: result, error } = await supabase.functions.invoke('wchain-graphql-proxy', {
+      body: {
         query,
         variables,
-      }),
+      }
     });
 
-    if (!response.ok) {
-      throw new Error(`GraphQL request failed: ${response.status} ${response.statusText}`);
+    if (error) {
+      throw new Error(`GraphQL request failed: ${error.message}`);
     }
-
-    const result: GraphQLResponse<T> = await response.json();
 
     if (result.errors && result.errors.length > 0) {
       throw new Error(`GraphQL errors: ${result.errors.map(e => e.message).join(', ')}`);
