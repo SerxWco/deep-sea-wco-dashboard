@@ -6,7 +6,6 @@ import {
   Coins, 
   Waves, 
   Info, 
-  Heart,
   Zap
 } from "lucide-react";
 import {
@@ -29,7 +28,6 @@ const navigationItems = [
   { title: "WAVE", url: "/wave", icon: Waves },
   { title: "Kraken Tracker", url: "/whales", icon: Zap },
   { title: "WCO Info", url: "/info", icon: Info },
-  { title: "Support Project", url: "/support", icon: Heart },
 ];
 
 export function OceanSidebar() {
