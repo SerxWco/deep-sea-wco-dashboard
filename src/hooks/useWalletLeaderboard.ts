@@ -68,6 +68,8 @@ const EXCHANGE_WALLETS: Record<string, string> = {
   "0x430d2ada8140378989d20eae6d48ea05bbce2977": "Bitmart Exchange",
 };
 
+export { EXCHANGE_WALLETS };
+
 const WRAPPED_WCO = [
   "0xedb8008031141024d50ca2839a607b2f82c1c045"
 ];
