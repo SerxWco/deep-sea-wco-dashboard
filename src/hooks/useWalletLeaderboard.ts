@@ -112,6 +112,7 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Function to fetch a specific wallet by address (updated for new API)
   const fetchSpecificWallet = async (address: string): Promise<WalletData | null> => {
@@ -154,11 +155,14 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         setError(null);
         setWallets([]);
         setHasMore(true);
+        setCurrentPage(1);
       }
       
-      let allWallets: WalletData[] = isLoadMore ? wallets : [];
-      let page = isLoadMore ? Math.floor(wallets.length / 100) + 1 : 1;
+      let allWallets: WalletData[] = isLoadMore ? [...wallets] : [];
+      let page = isLoadMore ? currentPage : 1;
       let keepFetching = true;
+      const maxPagesPerBatch = isLoadMore ? 5 : 10; // Load 10 pages initially, 5 more per loadMore
+      let pagesFetched = 0;
 
       // Health check first
       try {
@@ -170,7 +174,7 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         console.warn('API health check failed, trying anyway:', healthError);
       }
 
-      while (keepFetching) {
+      while (keepFetching && pagesFetched < maxPagesPerBatch) {
         console.log(`Fetching page ${page} with W-Chain Scanner API...`);
         
         const response = await fetch(
@@ -189,15 +193,28 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         }
         
         const result = await response.json();
-        console.log('W-Chain Scanner API Response:', result);
+        console.log(`Page ${page} API Response:`, { 
+          status: result.status, 
+          resultLength: result.result?.length || 0,
+          message: result.message 
+        });
         
-        if (!result || result.status !== '1' || !Array.isArray(result.result)) {
-          if (result.message === 'No transactions found' || result.result?.length === 0) {
-            console.log('No more wallets available');
+        if (!result || result.status !== '1') {
+          if (result.message === 'No transactions found' || !result.result || result.result.length === 0) {
+            console.log('No more wallets available from API');
+            setHasMore(false);
             keepFetching = false;
             break;
           }
           throw new Error(`Invalid API response: ${result.message || 'Unknown error'}`);
+        }
+
+        // Check if API returned empty results (no more pages)
+        if (!Array.isArray(result.result) || result.result.length === 0) {
+          console.log('API returned empty results, no more pages available');
+          setHasMore(false);
+          keepFetching = false;
+          break;
         }
 
         const processedWallets: WalletData[] = result.result
@@ -218,12 +235,7 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
           })
           .filter((wallet: WalletData) => wallet.balance > 0); // Filter out zero balance wallets
 
-        // Stop if no more wallets returned
-        if (processedWallets.length === 0) {
-          console.log('No more wallets in this page, stopping');
-          keepFetching = false;
-          break;
-        }
+        console.log(`Page ${page}: Raw results: ${result.result.length}, Processed (non-zero): ${processedWallets.length}`);
 
         // Add new batch of wallets
         allWallets = [...allWallets, ...processedWallets];
@@ -233,71 +245,80 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         
         // Move to next page
         page++;
+        pagesFetched++;
         
-        console.log(`Fetched page ${page - 1}, got ${processedWallets.length} wallets, total: ${allWallets.length}`);
+        console.log(`Completed page ${page - 1}, got ${processedWallets.length} wallets, total: ${allWallets.length}`);
         
         // Add delay between requests (100ms as specified)
-        if (keepFetching) {
+        if (keepFetching && pagesFetched < maxPagesPerBatch) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
 
-      // Verify all flagship wallets are present
-      console.log('Verifying flagship wallets...');
-      const flagshipAddresses = Object.keys(FLAGSHIP_WALLETS);
-      const foundFlagships = allWallets.filter(w => flagshipAddresses.includes(w.address.toLowerCase()));
-      const missingFlagships = flagshipAddresses.filter(addr => 
-        !foundFlagships.some(w => w.address.toLowerCase() === addr.toLowerCase())
-      );
+      // Update current page for next loadMore call
+      setCurrentPage(page);
 
-      console.log(`Found ${foundFlagships.length}/${flagshipAddresses.length} flagship wallets`);
-      
-      if (missingFlagships.length > 0) {
-        console.log('Fetching missing flagship wallets:', missingFlagships);
+      // If this was initial load and we fetched all requested pages, there might be more
+      if (!isLoadMore && pagesFetched === maxPagesPerBatch) {
+        setHasMore(true);
+      }
+
+      // Only fetch flagship wallets on initial load, not on loadMore
+      if (!isLoadMore) {
+        // Verify all flagship wallets are present
+        console.log('Verifying flagship wallets...');
+        const flagshipAddresses = Object.keys(FLAGSHIP_WALLETS);
+        const foundFlagships = allWallets.filter(w => flagshipAddresses.includes(w.address.toLowerCase()));
+        const missingFlagships = flagshipAddresses.filter(addr => 
+          !foundFlagships.some(w => w.address.toLowerCase() === addr.toLowerCase())
+        );
+
+        console.log(`Found ${foundFlagships.length}/${flagshipAddresses.length} flagship wallets`);
         
-        for (const address of missingFlagships) {
-          try {
-            const flagshipResponse = await fetch(
-              `https://scan.w-chain.com/api?module=account&action=balance&address=${address}&tag=latest`
-            );
-            
-            if (flagshipResponse.ok) {
-              const flagshipData = await flagshipResponse.json();
-              if (flagshipData.status === '1' && flagshipData.result) {
-                const balance = parseFloat(flagshipData.result) / 1e18;
-                const { category, emoji, label } = categorizeWallet(balance, address);
-                
-                allWallets.push({
-                  address,
-                  balance,
-                  category,
-                  emoji,
-                  txCount: 0,
-                  label
-                });
-                console.log(`✅ Added missing flagship wallet: ${label || address}`);
-              }
-            }
-          } catch (flagshipError) {
-            console.warn(`Failed to fetch flagship wallet ${address}:`, flagshipError);
-          }
+        if (missingFlagships.length > 0) {
+          console.log('Fetching missing flagship wallets:', missingFlagships);
           
-          // Small delay between requests
-          await new Promise(resolve => setTimeout(resolve, 100));
+          for (const address of missingFlagships) {
+            try {
+              const flagshipResponse = await fetch(
+                `https://scan.w-chain.com/api?module=account&action=balance&address=${address}&tag=latest`
+              );
+              
+              if (flagshipResponse.ok) {
+                const flagshipData = await flagshipResponse.json();
+                if (flagshipData.status === '1' && flagshipData.result) {
+                  const balance = parseFloat(flagshipData.result) / 1e18;
+                  const { category, emoji, label } = categorizeWallet(balance, address);
+                  
+                  allWallets.push({
+                    address,
+                    balance,
+                    category,
+                    emoji,
+                    txCount: 0,
+                    label
+                  });
+                  console.log(`✅ Added missing flagship wallet: ${label || address}`);
+                }
+              }
+            } catch (flagshipError) {
+              console.warn(`Failed to fetch flagship wallet ${address}:`, flagshipError);
+            }
+            
+            // Small delay between requests
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
         }
-        
-        // Update UI with flagship wallets added
-        setWallets([...allWallets]);
       }
 
-      // Sort final result by balance
+      // Sort final result by balance and update
       allWallets.sort((a, b) => b.balance - a.balance);
       setWallets([...allWallets]);
-      setHasMore(false);
       
     } catch (err) {
       console.error('Error fetching wallet data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch wallet data');
+      setHasMore(false);
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -305,8 +326,9 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   };
 
   const loadMore = async () => {
-    // No longer needed as all data is fetched automatically
-    // Kept for backward compatibility but does nothing
+    if (!loadingMore && hasMore) {
+      await fetchWalletData(true);
+    }
   };
 
   useEffect(() => {
