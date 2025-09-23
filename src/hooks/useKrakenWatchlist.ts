@@ -92,17 +92,15 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
     return results;
   };
 
-  // Classify transaction based on from/to addresses
   const classifyTransaction = (
     from: string, 
     to: string, 
-    krakenWallets: KrakenWallet[]
+    krakenAddresses: string[]
   ): TransactionClassification => {
     const fromLower = from.toLowerCase();
     const toLower = to.toLowerCase();
     
     const exchangeAddresses = Object.keys(EXCHANGE_WALLETS).map(addr => addr.toLowerCase());
-    const krakenAddresses = krakenWallets.map(k => k.address.toLowerCase());
 
     const fromIsExchange = exchangeAddresses.includes(fromLower);
     const toIsExchange = exchangeAddresses.includes(toLower);
@@ -140,19 +138,24 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
 
   // Optimized fetch transactions for a specific Kraken wallet with caching
   const fetchWalletTransactions = async (krakenWallet: KrakenWallet): Promise<KrakenTransaction[]> => {
-    // Check cache first
+    // Check cache first (15 minute expiration)
     const cached = getCachedTransactions(krakenWallet.address);
     if (cached) {
       return cached;
     }
 
     try {
-      const url = new URL(`https://scan.w-chain.com/api/listaccounts`);
-      url.searchParams.append('address', krakenWallet.address);
-      url.searchParams.append('transactions', 'true');
-      url.searchParams.append('limit', TRANSACTION_LIMIT.toString());
-
-      const response = await fetch(url.toString());
+      // Use W-Chain Scanner API format for transactions
+      const response = await fetch(
+        `https://scan.w-chain.com/api?module=account&action=txlist&address=${krakenWallet.address}&startblock=0&endblock=99999999&page=1&offset=100&sort=desc`,
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+        }
+      );
       
       if (!response.ok) {
         console.warn(`Failed to fetch transactions for ${krakenWallet.address}: ${response.status}`);
@@ -161,32 +164,32 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
       
       const data = await response.json();
       
-      if (!data.transactions || !Array.isArray(data.transactions)) {
+      if (!data || data.status !== '1' || !Array.isArray(data.result)) {
         return [];
       }
 
       const krakenTransactions: KrakenTransaction[] = [];
       
       // Process each transaction
-      for (const tx of data.transactions) {
-        if (!tx.value || !tx.from?.hash || !tx.to?.hash) continue;
+      for (const tx of data.result) {
+        if (!tx.value || !tx.from || !tx.to) continue;
         
         const valueWei = parseFloat(tx.value);
         const amountWCO = valueWei / 1e18;
         
-        // Only include large transactions (≥1M WCO)
-        if (amountWCO >= LARGE_TRANSACTION_THRESHOLD) {
+        // Only include large transactions (≥50k WCO for better activity)
+        if (amountWCO >= 50000) {
           const classification = classifyTransaction(
-            tx.from.hash,
-            tx.to.hash,
-            [krakenWallet] // Pass current kraken for classification
+            tx.from,
+            tx.to,
+            krakenWallets.map(k => k.address.toLowerCase()) // Pass all kraken addresses for classification
           );
 
           krakenTransactions.push({
             hash: tx.hash,
-            timestamp: tx.timestamp || new Date().toISOString(),
-            from: tx.from.hash,
-            to: tx.to.hash,
+            timestamp: new Date(parseInt(tx.timeStamp) * 1000).toISOString(),
+            from: tx.from,
+            to: tx.to,
             value: tx.value,
             amount: amountWCO,
             classification,
@@ -200,6 +203,18 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
       return krakenTransactions;
     } catch (error) {
       console.error(`Error fetching transactions for ${krakenWallet.address}:`, error);
+      
+      // Return cached data even if expired when API fails
+      const cached = localStorage.getItem(getCacheKey(krakenWallet.address));
+      if (cached) {
+        try {
+          const { data } = JSON.parse(cached);
+          return data;
+        } catch (e) {
+          console.warn('Failed to parse cached transactions as fallback:', e);
+        }
+      }
+      
       return [];
     }
   };
