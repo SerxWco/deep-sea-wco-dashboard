@@ -29,7 +29,7 @@ export const WalletInfo = ({ walletInfo, onDisconnect }: WalletInfoProps) => {
   };
 
   const openWChainScan = () => {
-    window.open(`https://scan.w-chain.com/address/${walletInfo.address}`, '_blank');
+    window.open(`https://scan.w-chain.com/address/${walletInfo.address}`, '_blank', 'noopener,noreferrer');
   };
 
   const wcoUsdValue = wcoData && parseFloat(walletInfo.wcoBalance) > 0 
