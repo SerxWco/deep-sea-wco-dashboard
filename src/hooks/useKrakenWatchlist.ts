@@ -7,7 +7,6 @@ import {
   TRANSACTION_CLASSIFICATIONS,
   TransactionClassification 
 } from '@/types/kraken';
-import { supabase } from '@/integrations/supabase/client';
 
 const KRAKEN_MIN_BALANCE = 5000000; // 5M WCO
 const LARGE_TRANSACTION_THRESHOLD = 1000000; // 1M WCO
@@ -148,27 +147,28 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke('wchain-address-proxy', {
-        body: {
-          address: krakenWallet.address,
-          endpoint: 'transactions',
-          params: { limit: TRANSACTION_LIMIT } // Reduced limit for faster responses
-        }
-      });
+      const url = new URL(`https://scan.w-chain.com/api/listaccounts`);
+      url.searchParams.append('address', krakenWallet.address);
+      url.searchParams.append('transactions', 'true');
+      url.searchParams.append('limit', TRANSACTION_LIMIT.toString());
+
+      const response = await fetch(url.toString());
       
-      if (error) {
-        console.warn(`Failed to fetch transactions for ${krakenWallet.address}:`, error);
+      if (!response.ok) {
+        console.warn(`Failed to fetch transactions for ${krakenWallet.address}: ${response.status}`);
         return [];
       }
       
-      if (!data.items || !Array.isArray(data.items)) {
+      const data = await response.json();
+      
+      if (!data.transactions || !Array.isArray(data.transactions)) {
         return [];
       }
 
       const krakenTransactions: KrakenTransaction[] = [];
       
       // Process each transaction
-      for (const tx of data.items) {
+      for (const tx of data.transactions) {
         if (!tx.value || !tx.from?.hash || !tx.to?.hash) continue;
         
         const valueWei = parseFloat(tx.value);

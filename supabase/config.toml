@@ -5,15 +5,3 @@ verify_jwt = false
 
 [functions.og88-price-proxy]
 verify_jwt = false
-
-[functions.wchain-address-proxy]
-verify_jwt = false
-
-[functions.wchain-tokens-proxy]
-verify_jwt = false
-
-[functions.wchain-stats-proxy]
-verify_jwt = false
-
-[functions.wchain-graphql-proxy]
-verify_jwt = false

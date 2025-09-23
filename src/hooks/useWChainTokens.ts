@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { WChainToken, WChainTokensResponse, TokenListFilters } from '@/types/token';
-import { supabase } from '@/integrations/supabase/client';
 
 interface UseWChainTokensReturn {
   tokens: WChainToken[];
@@ -12,7 +11,7 @@ interface UseWChainTokensReturn {
   filteredTokens: WChainToken[];
 }
 
-// Using Supabase Edge Functions proxy to bypass CORS
+// Using direct API calls to non-CORS restricted W-Chain endpoints
 
 export const useWChainTokens = (): UseWChainTokensReturn => {
   const [tokens, setTokens] = useState<WChainToken[]>([]);
@@ -50,13 +49,20 @@ export const useWChainTokens = (): UseWChainTokensReturn => {
           });
         }
 
-        const { data, error } = await supabase.functions.invoke('wchain-tokens-proxy', {
-          body: { params }
+        const url = new URL('https://scan.w-chain.com/api/token-balances');
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) {
+            url.searchParams.append(key, String(value));
+          }
         });
+
+        const response = await fetch(url.toString());
         
-        if (error) {
-          throw new Error(`Failed to fetch tokens: ${error.message}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch tokens: ${response.status}`);
         }
+        
+        const data = await response.json();
       // Deduplicate tokens by address to avoid duplicates across pages
       const newTokens = data.items.filter(
         token => !allTokens.some(existing => 

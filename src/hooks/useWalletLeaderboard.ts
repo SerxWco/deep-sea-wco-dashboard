@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
 export interface WalletData {
   address: string;
@@ -117,14 +116,14 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   // Function to fetch a specific wallet by address
   const fetchSpecificWallet = async (address: string): Promise<WalletData | null> => {
     try {
-      const { data: account, error } = await supabase.functions.invoke('wchain-address-proxy', {
-        body: { address }
-      });
+      const response = await fetch(`https://scan.w-chain.com/api/listaccounts?address=${address}`);
       
-      if (error) {
-        console.warn(`Failed to fetch wallet ${address}:`, error);
+      if (!response.ok) {
+        console.warn(`Failed to fetch wallet ${address}: ${response.status}`);
         return null;
       }
+      
+      const account = await response.json();
       if (!account) return null;
 
       const balanceWei = parseFloat(account.coin_balance) || 0;
@@ -162,17 +161,21 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
 
       while (keepFetching) {
         console.log(`Fetching addresses with params:`, params);
-        const { data: result, error } = await supabase.functions.invoke('wchain-address-proxy', {
-          body: { 
-            address: '', // Empty address means fetch addresses list
-            endpoint: 'list',
-            params 
+        
+        const url = new URL('https://scan.w-chain.com/api/listaccounts');
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) {
+            url.searchParams.append(key, String(value));
           }
         });
 
-        if (error) {
-          throw new Error(`HTTP error: ${error.message}`);
+        const response = await fetch(url.toString());
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error: ${response.status}`);
         }
+        
+        const result = await response.json();
         
         if (!result || !result.items || !Array.isArray(result.items)) {
           throw new Error('Invalid data format from W-Chain API');
