@@ -156,7 +156,7 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
       
       let allWallets: WalletData[] = isLoadMore ? wallets : [];
       const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
-      let url = `${baseUrl}?items_count=50`;
+      let url = `${baseUrl}?items_count=100`;
       let keepFetching = true;
 
       while (keepFetching) {
@@ -198,7 +198,7 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         // Check if more pages exist
         if (result.next_page_params) {
           const params = new URLSearchParams(result.next_page_params).toString();
-          url = `${baseUrl}?items_count=50&${params}`;
+          url = `${baseUrl}?items_count=100&${params}`;
         } else {
           keepFetching = false;
         }
