@@ -11,7 +11,7 @@ interface UseWChainTokensReturn {
   filteredTokens: WChainToken[];
 }
 
-// Using direct API calls to non-CORS restricted W-Chain endpoints
+const API_BASE_URL = 'https://scan.w-chain.com/api/v2';
 
 export const useWChainTokens = (): UseWChainTokensReturn => {
   const [tokens, setTokens] = useState<WChainToken[]>([]);
@@ -40,29 +40,21 @@ export const useWChainTokens = (): UseWChainTokensReturn => {
       const maxPages = 10; // Limit to prevent infinite loops
       
       do {
-        const params: any = {};
+        const url = new URL(`${API_BASE_URL}/tokens`);
         if (nextPageParams) {
           Object.entries(nextPageParams).forEach(([key, value]) => {
             if (value !== null && value !== undefined) {
-              params[key] = String(value);
+              url.searchParams.append(key, String(value));
             }
           });
         }
 
-        const url = new URL('https://scan.w-chain.com/api/token-balances');
-        Object.entries(params).forEach(([key, value]) => {
-          if (value !== null && value !== undefined) {
-            url.searchParams.append(key, String(value));
-          }
-        });
-
         const response = await fetch(url.toString());
-        
         if (!response.ok) {
-          throw new Error(`Failed to fetch tokens: ${response.status}`);
+          throw new Error(`Failed to fetch tokens: ${response.statusText}`);
         }
-        
-        const data = await response.json();
+
+      const data: WChainTokensResponse = await response.json();
       // Deduplicate tokens by address to avoid duplicates across pages
       const newTokens = data.items.filter(
         token => !allTokens.some(existing => 

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { wchainGraphQL } from '@/services/wchainGraphQL';
-import { supabase } from '@/integrations/supabase/client';
 
 interface NetworkStats {
   totalTransactionsCount: string;
@@ -44,7 +43,7 @@ interface UseWChainNetworkStatsReturn {
   error: string | null;
 }
 
-// Using Supabase Edge Functions proxy to bypass CORS
+const W_CHAIN_API_BASE = 'https://scan.w-chain.com/api/v2';
 
 // Consider a wallet active if it has transacted in the last 7 days
 const ACTIVE_WALLET_THRESHOLD = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
@@ -131,28 +130,26 @@ export const useWChainNetworkStats = (totalTrackedWallets: number = 0): UseWChai
   };
 
   const fetchNetworkStatsREST = async () => {
-    // Fallback to REST implementation using proxy
-    const { data: networkStats, error: statsError } = await supabase.functions.invoke('wchain-stats-proxy', {
-      body: {}
-    });
-    if (statsError) {
-      throw new Error(`Stats API error: ${statsError.message}`);
+    // Fallback to original REST implementation
+    const statsResponse = await fetch(`${W_CHAIN_API_BASE}/stats`);
+    if (!statsResponse.ok) {
+      throw new Error(`Stats API error: ${statsResponse.status}`);
     }
+    const networkStats: NetworkStats = await statsResponse.json();
 
-    const { data: addressesData, error: addressesError } = await supabase.functions.invoke('wchain-address-proxy', {
-      body: { 
-        address: '', 
-        endpoint: 'list',
-        params: { limit: 1000 }
-      }
-    });
-    if (addressesError) {
-      throw new Error(`Addresses API error: ${addressesError.message}`);
+    const addressesResponse = await fetch(`${W_CHAIN_API_BASE}/addresses?limit=1000`);
+    if (!addressesResponse.ok) {
+      throw new Error(`Addresses API error: ${addressesResponse.status}`);
     }
+    const addressesData = await addressesResponse.json();
     const addresses: AddressData[] = addressesData.items || [];
     
-    // For transactions, we'll simulate with a smaller dataset since we don't have a transactions proxy yet
-    const transactions: TransactionData[] = [];
+    const transactionsResponse = await fetch(`${W_CHAIN_API_BASE}/transactions?limit=1000`);
+    if (!transactionsResponse.ok) {
+      throw new Error(`Transactions API error: ${transactionsResponse.status}`);
+    }
+    const transactionsData = await transactionsResponse.json();
+    const transactions: TransactionData[] = transactionsData.items || [];
 
     // Calculate total holders (addresses with WCO balance > 1)
     const totalHolders = addresses.filter(address => {
