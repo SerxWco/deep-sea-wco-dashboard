@@ -27,7 +27,7 @@ export const TokenListItem = ({ token }: TokenListItemProps) => {
   };
 
   const openScanner = () => {
-    window.open(`https://w-chain.com`, '_blank');
+    window.open(`https://w-chain.com`, '_blank', 'noopener,noreferrer');
   };
 
   const formatAddress = (address: string) => {
