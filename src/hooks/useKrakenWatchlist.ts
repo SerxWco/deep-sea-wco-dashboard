@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useWalletLeaderboard, EXCHANGE_WALLETS } from './useWalletLeaderboard';
 import { 
   KrakenTransaction, 
@@ -11,6 +11,9 @@ import { supabase } from '@/integrations/supabase/client';
 
 const KRAKEN_MIN_BALANCE = 5000000; // 5M WCO
 const LARGE_TRANSACTION_THRESHOLD = 1000000; // 1M WCO
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+const CONCURRENT_REQUESTS = 3; // Limit concurrent API calls
+const TRANSACTION_LIMIT = 10; // Reduced from 20 for faster responses
 
 export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
   const [transactions, setTransactions] = useState<KrakenTransaction[]>([]);
@@ -21,8 +24,39 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
   
   const { wallets: allWallets, loading: walletsLoading } = useWalletLeaderboard();
 
-  // Get Kraken wallets from leaderboard data
-  const getKrakenWallets = (): KrakenWallet[] => {
+  // Cache functions
+  const getCacheKey = (address: string) => `kraken_transactions_${address}`;
+  
+  const getCachedTransactions = (address: string): KrakenTransaction[] | null => {
+    try {
+      const cached = localStorage.getItem(getCacheKey(address));
+      if (!cached) return null;
+      
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp > CACHE_DURATION) {
+        localStorage.removeItem(getCacheKey(address));
+        return null;
+      }
+      
+      return data;
+    } catch {
+      return null;
+    }
+  };
+  
+  const setCachedTransactions = (address: string, transactions: KrakenTransaction[]) => {
+    try {
+      localStorage.setItem(getCacheKey(address), JSON.stringify({
+        data: transactions,
+        timestamp: Date.now()
+      }));
+    } catch {
+      // Ignore cache errors
+    }
+  };
+
+  // Progressive Kraken wallet detection - don't wait for complete leaderboard
+  const getProgressiveKrakenWallets = useCallback((): KrakenWallet[] => {
     return allWallets
       .filter(wallet => wallet.balance >= KRAKEN_MIN_BALANCE)
       .map(wallet => ({
@@ -30,6 +64,33 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
         balance: wallet.balance,
         label: wallet.label,
       }));
+  }, [allWallets]);
+
+  // Batch API requests to avoid overwhelming the server
+  const batchRequests = async <T>(
+    items: T[],
+    batchSize: number,
+    processor: (item: T) => Promise<any>
+  ): Promise<any[]> => {
+    const results: any[] = [];
+    
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      const batchResults = await Promise.allSettled(
+        batch.map(processor)
+      );
+      
+      results.push(...batchResults.map(result => 
+        result.status === 'fulfilled' ? result.value : []
+      ));
+      
+      // Small delay between batches to be respectful to the API
+      if (i + batchSize < items.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    return results;
   };
 
   // Classify transaction based on from/to addresses
@@ -78,14 +139,20 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
     return TRANSACTION_CLASSIFICATIONS.outflow;
   };
 
-  // Fetch transactions for a specific Kraken wallet
+  // Optimized fetch transactions for a specific Kraken wallet with caching
   const fetchWalletTransactions = async (krakenWallet: KrakenWallet): Promise<KrakenTransaction[]> => {
+    // Check cache first
+    const cached = getCachedTransactions(krakenWallet.address);
+    if (cached) {
+      return cached;
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke('wchain-address-proxy', {
         body: {
           address: krakenWallet.address,
           endpoint: 'transactions',
-          params: { limit: 20 }
+          params: { limit: TRANSACTION_LIMIT } // Reduced limit for faster responses
         }
       });
       
@@ -128,6 +195,8 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
         }
       }
 
+      // Cache the results
+      setCachedTransactions(krakenWallet.address, krakenTransactions);
       return krakenTransactions;
     } catch (error) {
       console.error(`Error fetching transactions for ${krakenWallet.address}:`, error);
@@ -135,15 +204,14 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
     }
   };
 
-  // Fetch all Kraken transactions
+  // Optimized fetch all Kraken transactions with progressive loading and batching
   const fetchKrakenTransactions = async () => {
-    if (walletsLoading) return;
-    
     setLoading(true);
     setError(null);
 
     try {
-      const krakens = getKrakenWallets();
+      // Progressive loading: get current available Kraken wallets
+      const krakens = getProgressiveKrakenWallets();
       setKrakenWallets(krakens);
 
       if (krakens.length === 0) {
@@ -154,12 +222,12 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
 
       console.log(`Fetching transactions for ${krakens.length} Kraken wallets...`);
 
-      // Fetch transactions for all Kraken wallets
-      const allTransactionPromises = krakens.map(kraken => 
-        fetchWalletTransactions(kraken)
+      // Use batched parallel processing instead of sequential
+      const transactionResults = await batchRequests(
+        krakens,
+        CONCURRENT_REQUESTS,
+        fetchWalletTransactions
       );
-
-      const transactionResults = await Promise.all(allTransactionPromises);
       
       // Flatten and sort by timestamp (newest first)
       const allTransactions = transactionResults
@@ -183,9 +251,17 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
     fetchKrakenTransactions();
   };
 
-  // Initial fetch when wallet data is ready
+  // Progressive loading: start fetching as soon as wallet data is available
   useEffect(() => {
-    if (!walletsLoading) {
+    // Don't wait for complete loading - start with available wallets
+    if (allWallets.length > 0) {
+      fetchKrakenTransactions();
+    }
+  }, [allWallets.length]); // Trigger when wallet count changes
+
+  // Also trigger when loading completes for any remaining wallets
+  useEffect(() => {
+    if (!walletsLoading && allWallets.length > 0) {
       fetchKrakenTransactions();
     }
   }, [walletsLoading]);
