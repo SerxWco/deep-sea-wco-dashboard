@@ -80,6 +80,21 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
   // Fetch transactions for a specific Kraken wallet
   const fetchWalletTransactions = async (krakenWallet: KrakenWallet): Promise<KrakenTransaction[]> => {
     try {
+      // Short-lived per-wallet cache to avoid duplicate fetches across refetches
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anyGlobal = globalThis as any;
+      if (!anyGlobal.__KRAKEN_TX_CACHE__) {
+        anyGlobal.__KRAKEN_TX_CACHE__ = new Map<string, { ts: number; data: KrakenTransaction[] }>();
+      }
+      const CACHE_TTL_MS = 60_000; // 60 seconds
+      const cache: Map<string, { ts: number; data: KrakenTransaction[] }> = anyGlobal.__KRAKEN_TX_CACHE__;
+      const key = krakenWallet.address.toLowerCase();
+      const cached = cache.get(key);
+      const now = Date.now();
+      if (cached && (now - cached.ts) < CACHE_TTL_MS) {
+        return cached.data;
+      }
+
       const response = await fetch(
         `https://scan.w-chain.com/api/v2/addresses/${krakenWallet.address}/transactions?limit=20`
       );
@@ -125,6 +140,8 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
         }
       }
 
+      // Save to cache
+      cache.set(key, { ts: Date.now(), data: krakenTransactions });
       return krakenTransactions;
     } catch (error) {
       console.error(`Error fetching transactions for ${krakenWallet.address}:`, error);
@@ -151,21 +168,44 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
 
       console.log(`Fetching transactions for ${krakens.length} Kraken wallets...`);
 
-      // Fetch transactions for all Kraken wallets
-      const allTransactionPromises = krakens.map(kraken => 
-        fetchWalletTransactions(kraken)
-      );
+      // Concurrency-limited fetching with progressive updates
+      const MAX_CONCURRENCY = 6;
+      const queue = [...krakens];
+      const workers: Promise<void>[] = [];
 
-      const transactionResults = await Promise.all(allTransactionPromises);
-      
-      // Flatten and sort by timestamp (newest first)
-      const allTransactions = transactionResults
-        .flat()
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      async function worker() {
+        while (queue.length > 0) {
+          const next = queue.shift();
+          if (!next) break;
+          try {
+            const txs = await fetchWalletTransactions(next);
+            if (txs.length > 0) {
+              setTransactions(prev => {
+                const merged = [...prev, ...txs];
+                const seen = new Set<string>();
+                const unique = merged.filter(tx => {
+                  if (seen.has(tx.hash)) return false;
+                  seen.add(tx.hash);
+                  return true;
+                });
+                unique.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+                return unique;
+              });
+            }
+          } catch (e) {
+            console.warn('Wallet tx fetch failed:', e);
+          }
+          // Small jitter to avoid burst limits
+          await new Promise(r => setTimeout(r, 75));
+        }
+      }
 
-      console.log(`Found ${allTransactions.length} large Kraken transactions`);
-      
-      setTransactions(allTransactions);
+      for (let i = 0; i < Math.min(MAX_CONCURRENCY, krakens.length); i++) {
+        workers.push(worker());
+      }
+      await Promise.all(workers);
+
+      console.log(`Found ${transactions.length} large Kraken transactions`);
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Error fetching Kraken watchlist data:', err);

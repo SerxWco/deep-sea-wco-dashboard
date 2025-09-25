@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { wchainGraphQL } from '@/services/wchainGraphQL';
 
 export interface WalletData {
   address: string;
@@ -113,6 +114,17 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
 
+  // Lightweight in-memory cache (resets on reload)
+  // Serves both Ocean Creatures and Kraken watchlist quickly
+  const CACHE_TTL_MS = 60_000; // 60s
+  // Note: module-level singleton to share across hook instances
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyGlobal = globalThis as any;
+  if (!anyGlobal.__LEADERBOARD_CACHE__) {
+    anyGlobal.__LEADERBOARD_CACHE__ = { ts: 0, data: [] as WalletData[] };
+  }
+  const LEADERBOARD_CACHE: { ts: number; data: WalletData[] } = anyGlobal.__LEADERBOARD_CACHE__;
+
   // Function to fetch a specific wallet by address
   const fetchSpecificWallet = async (address: string): Promise<WalletData | null> => {
     try {
@@ -150,8 +162,18 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
       } else {
         setLoading(true);
         setError(null);
-        setWallets([]);
         setHasMore(true);
+
+        // Serve from short-lived cache for instant UX if available
+        const now = Date.now();
+        if (!isLoadMore && LEADERBOARD_CACHE.data.length > 0 && (now - LEADERBOARD_CACHE.ts) < CACHE_TTL_MS) {
+          setWallets(LEADERBOARD_CACHE.data);
+          setHasMore(false);
+          setLoading(false);
+          setLoadingMore(false);
+          return;
+        }
+        setWallets([]);
       }
       
       let allWallets: WalletData[] = isLoadMore ? wallets : [];
@@ -159,6 +181,41 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
       let url = `${baseUrl}?items_count=100`;
       let keepFetching = true;
 
+      // 1) Fast path: GraphQL (fetch top addresses in one request)
+      try {
+        const graphOK = await wchainGraphQL.testConnection();
+        if (graphOK && !isLoadMore) {
+          console.log('Using GraphQL fast-path for leaderboard');
+          const result = await wchainGraphQL.getNetworkStats(5000);
+          const processedWallets: WalletData[] = result.addresses.items.map((account: any) => {
+            const balanceWei = parseFloat(account.coinBalance) || 0;
+            const balance = balanceWei / 1e18;
+            const { category, emoji, label } = categorizeWallet(balance, account.hash);
+            return {
+              address: account.hash,
+              balance,
+              category,
+              emoji,
+              txCount: parseInt(account.transactionsCount) || 0,
+              label,
+            };
+          });
+
+          allWallets = processedWallets;
+          setWallets([...allWallets]);
+          setHasMore(false);
+
+          // Save to cache
+          LEADERBOARD_CACHE.data = [...allWallets];
+          LEADERBOARD_CACHE.ts = Date.now();
+
+          return; // done
+        }
+      } catch (e) {
+        console.warn('GraphQL fast-path failed, falling back to REST:', e);
+      }
+
+      // 2) Fallback: REST paginated crawl (100 per page)
       while (keepFetching) {
         console.log(`Fetching URL:`, url);
         const response = await fetch(url);
@@ -239,6 +296,9 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
       }
 
       setHasMore(false);
+      // Save to cache
+      LEADERBOARD_CACHE.data = [...allWallets];
+      LEADERBOARD_CACHE.ts = Date.now();
       
     } catch (err) {
       console.error('Error fetching wallet data:', err);
