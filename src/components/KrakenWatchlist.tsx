@@ -6,10 +6,14 @@ import { RefreshCw, Clock, TrendingUp, TrendingDown, ArrowRightLeft, ExternalLin
 import { useKrakenWatchlist } from '@/hooks/useKrakenWatchlist';
 import { KrakenTransaction } from '@/types/kraken';
 import { formatNumber } from '@/utils/formatters';
+import { WalletDetailsModal } from '@/components/WalletDetailsModal';
+import { TransactionDetailsModal } from '@/components/TransactionDetailsModal';
 
 export const KrakenWatchlist = () => {
   const { transactions, krakenWallets, loading, error, refetch, lastUpdated } = useKrakenWatchlist();
   const [timeFilter, setTimeFilter] = useState<'24h' | '48h' | 'all'>('24h');
+  const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<string | null>(null);
 
   // Filter transactions by time
   const filteredTransactions = transactions.filter(tx => {
@@ -216,25 +220,21 @@ export const KrakenWatchlist = () => {
                     </div>
                     
                     <div className="text-sm font-mono">
-                      <a
-                        href={getAddressExplorerUrl(tx.from)}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => setSelectedWallet(tx.from)}
                         className="text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1"
                       >
                         {formatAddress(tx.from)}
                         <ExternalLink className="w-3 h-3" />
-                      </a>
+                      </button>
                       <span className="mx-2 text-muted-foreground">→</span>
-                      <a
-                        href={getAddressExplorerUrl(tx.to)}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => setSelectedWallet(tx.to)}
                         className="text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1"
                       >
                         {formatAddress(tx.to)}
                         <ExternalLink className="w-3 h-3" />
-                      </a>
+                      </button>
                     </div>
                   </div>
                   
@@ -243,16 +243,14 @@ export const KrakenWatchlist = () => {
                       <div className="text-lg font-bold text-primary">
                         {formatNumber(tx.amount)} WCO
                       </div>
-                      <a
-                        href={getTxExplorerUrl(tx.hash)}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => setSelectedTransaction(tx.hash)}
                         className="text-xs text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1 font-mono"
-                        title="View transaction on explorer"
+                        title="View transaction details"
                       >
                         {tx.hash.slice(0, 10)}...{tx.hash.slice(-6)}
                         <ExternalLink className="w-3 h-3" />
-                      </a>
+                      </button>
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {tx.classification.description}
@@ -268,6 +266,18 @@ export const KrakenWatchlist = () => {
       <div className="text-center text-xs text-muted-foreground">
         💡 Kraken wallets hold ≥5M WCO • Only showing transactions ≥1M WCO
       </div>
+
+      {/* Modals */}
+      <WalletDetailsModal
+        isOpen={selectedWallet !== null}
+        onClose={() => setSelectedWallet(null)}
+        address={selectedWallet}
+      />
+      <TransactionDetailsModal
+        isOpen={selectedTransaction !== null}
+        onClose={() => setSelectedTransaction(null)}
+        hash={selectedTransaction}
+      />
     </div>
   );
 };

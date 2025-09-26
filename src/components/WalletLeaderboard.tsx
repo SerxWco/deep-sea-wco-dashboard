@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Loader2, ExternalLink } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useWalletLeaderboard, WalletData, CategoryInfo } from '@/hooks/useWalletLeaderboard';
 import { useWCOMarketData } from '@/hooks/useWCOMarketData';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
+import { WalletDetailsModal } from '@/components/WalletDetailsModal';
 
 export function WalletLeaderboard() {
   const { wallets, loading, loadingMore, error, refetch, loadMore, hasMore, totalFetched, allCategories } = useWalletLeaderboard();
@@ -15,6 +16,7 @@ export function WalletLeaderboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
+  const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const wcoPrice = marketData?.current_price || 0;
@@ -202,19 +204,23 @@ export function WalletLeaderboard() {
                                  <span className="text-muted-foreground font-mono text-sm">
                                    #{index + 1}
                                  </span>
-                                  <div>
-                                    <div className="font-mono text-sm">
-                                      {formatAddress(wallet.address)}
-                                    </div>
-                                    {wallet.label && (
-                                      <div className="text-xs text-primary font-medium">
-                                        {wallet.label}
-                                      </div>
-                                    )}
-                                    <div className="text-xs text-muted-foreground">
-                                      {wallet.txCount.toLocaleString()} txns
-                                    </div>
-                                  </div>
+                                   <div>
+                                     <button
+                                       onClick={() => setSelectedWallet(wallet.address)}
+                                       className="font-mono text-sm text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1"
+                                     >
+                                       {formatAddress(wallet.address)}
+                                       <ExternalLink className="w-3 h-3" />
+                                     </button>
+                                     {wallet.label && (
+                                       <div className="text-xs text-primary font-medium">
+                                         {wallet.label}
+                                       </div>
+                                     )}
+                                     <div className="text-xs text-muted-foreground">
+                                       {wallet.txCount.toLocaleString()} txns
+                                     </div>
+                                   </div>
                                </div>
                                
                                <div className="text-right">
@@ -259,8 +265,15 @@ export function WalletLeaderboard() {
               >
                 Load More Wallets
               </Button>
-            )}
-          </div>
+      )}
+      
+      {/* Wallet Details Modal */}
+      <WalletDetailsModal
+        isOpen={selectedWallet !== null}
+        onClose={() => setSelectedWallet(null)}
+        address={selectedWallet}
+      />
+    </div>
         )}
 
         {!hasMore && wallets.length > 0 && (
