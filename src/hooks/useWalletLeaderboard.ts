@@ -215,9 +215,9 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         console.warn('GraphQL fast-path failed, falling back to REST:', e);
       }
 
-      // 2) Fallback: REST paginated crawl - fetch first 10 pages quickly  
+      // 2) Fallback: REST paginated crawl - fetch first 50 pages to get more wallets
       let pageCount = 0;
-      const maxInitialPages = 10;
+      const maxInitialPages = 50;
       
       while (keepFetching && pageCount < maxInitialPages) {
         console.log(`Fetching page ${pageCount + 1}:`, url);
@@ -276,7 +276,7 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         
         // Add small delay between requests to avoid overwhelming the API
         if (keepFetching && pageCount < maxInitialPages) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
 
