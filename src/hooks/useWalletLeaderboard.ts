@@ -215,9 +215,12 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         console.warn('GraphQL fast-path failed, falling back to REST:', e);
       }
 
-      // 2) Fallback: REST paginated crawl (100 per page)
-      while (keepFetching) {
-        console.log(`Fetching URL:`, url);
+      // 2) Fallback: REST paginated crawl - fetch first 10 pages quickly  
+      let pageCount = 0;
+      const maxInitialPages = 10;
+      
+      while (keepFetching && pageCount < maxInitialPages) {
+        console.log(`Fetching page ${pageCount + 1}:`, url);
         const response = await fetch(url);
 
         if (!response.ok) {
@@ -227,7 +230,14 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         const result = await response.json();
         
         if (!result || !result.items || !Array.isArray(result.items)) {
-          throw new Error('Invalid data format from W-Chain API');
+          console.warn('No more data from API, stopping fetch');
+          break;
+        }
+
+        // Stop if API returns empty results (no more data)
+        if (result.items.length === 0) {
+          console.log('API returned empty results, stopping fetch');
+          break;
         }
 
         const processedWallets: WalletData[] = result.items.map((account: any) => {
@@ -246,11 +256,13 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
           };
         });
 
-        // Add new batch of wallets (no duplicate filtering to avoid complexity)
+        // Add new batch of wallets
         allWallets = [...allWallets, ...processedWallets];
         
         // Update UI with current batch for progressive loading
         setWallets([...allWallets]);
+        
+        pageCount++;
         
         // Check if more pages exist
         if (result.next_page_params) {
@@ -260,10 +272,10 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
           keepFetching = false;
         }
         
-        console.log(`Fetched page, total wallets: ${allWallets.length}, has more: ${keepFetching}`);
+        console.log(`Fetched page ${pageCount}, total wallets: ${allWallets.length}, processed: ${processedWallets.length}`);
         
         // Add small delay between requests to avoid overwhelming the API
-        if (keepFetching) {
+        if (keepFetching && pageCount < maxInitialPages) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
@@ -310,8 +322,61 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   };
 
   const loadMore = async () => {
-    // No longer needed as all data is fetched automatically
-    // Kept for backward compatibility but does nothing
+    if (!hasMore || loadingMore) return;
+    
+    setLoadingMore(true);
+    try {
+      const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
+      // Calculate next page URL based on current wallet count
+      const currentCount = wallets.length;
+      let url = `${baseUrl}?items_count=100&offset=${currentCount}`;
+      
+      console.log(`Loading more wallets from offset ${currentCount}`);
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result?.items || result.items.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      const processedWallets: WalletData[] = result.items.map((account: any) => {
+        const balanceWei = parseFloat(account.coin_balance) || 0;
+        const balance = balanceWei / 1e18;
+        const { category, emoji, label } = categorizeWallet(balance, account.hash);
+        
+        return {
+          address: account.hash,
+          balance,
+          category,
+          emoji,
+          txCount: parseInt(account.transaction_count || account.tx_count) || 0,
+          label,
+        };
+      });
+
+      const updatedWallets = [...wallets, ...processedWallets];
+      setWallets(updatedWallets);
+      
+      // Update cache
+      LEADERBOARD_CACHE.data = updatedWallets;
+      LEADERBOARD_CACHE.ts = Date.now();
+      
+      // Check if more data available
+      setHasMore(!!result.next_page_params);
+      
+      console.log(`Loaded ${processedWallets.length} more wallets, total: ${updatedWallets.length}`);
+    } catch (err) {
+      console.error('Error loading more wallets:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load more wallets');
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   useEffect(() => {

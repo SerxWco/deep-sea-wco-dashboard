@@ -96,7 +96,7 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
       }
 
       const response = await fetch(
-        `https://scan.w-chain.com/api/v2/addresses/${krakenWallet.address}/transactions?limit=20`
+        `https://scan.w-chain.com/api/v2/addresses/${krakenWallet.address}/transactions?filter=to_from&limit=50`
       );
       
       if (!response.ok) {
@@ -169,7 +169,7 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
       console.log(`Fetching transactions for ${krakens.length} Kraken wallets...`);
 
       // Concurrency-limited fetching with progressive updates
-      const MAX_CONCURRENCY = 6;
+      const MAX_CONCURRENCY = 8;
       const queue = [...krakens];
       const workers: Promise<void>[] = [];
 
@@ -195,8 +195,8 @@ export const useKrakenWatchlist = (): UseKrakenWatchlistReturn => {
           } catch (e) {
             console.warn('Wallet tx fetch failed:', e);
           }
-          // Small jitter to avoid burst limits
-          await new Promise(r => setTimeout(r, 75));
+          // Reduced delay for faster fetching
+          await new Promise(r => setTimeout(r, 50));
         }
       }
 

@@ -62,7 +62,7 @@ serve(async (req) => {
     console.error('Error in og88-price-proxy function:', error);
     
     return new Response(JSON.stringify({ 
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       timestamp: Date.now()
     }), {
       status: 500,
