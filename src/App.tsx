@@ -10,6 +10,7 @@ import OceanCreatures from "./pages/OceanCreatures";
 import Portfolio from "./pages/Portfolio";
 import Tokens from "./pages/Tokens";
 import Wave from "./pages/Wave";
+import WcoInfo from "./pages/WcoInfo";
 import KrakenWatchlistPage from "./pages/KrakenWatchlist";
 import NotFound from "./pages/NotFound";
 
@@ -54,10 +55,7 @@ const App = () => (
           } />
           <Route path="/info" element={
             <DashboardLayout>
-              <div className="p-6 text-center">
-                <h1 className="text-2xl font-bold text-foreground mb-4">WCO Info</h1>
-                <p className="text-muted-foreground">Coming soon...</p>
-              </div>
+              <WcoInfo />
             </DashboardLayout>
           } />
           <Route path="/support" element={
