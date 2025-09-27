@@ -95,6 +95,17 @@ export default function WcoInfo() {
           <p>
             For developers, blockchain enthusiasts, and businesses, W Coin opens the door to decentralized finance (DeFi), frictionless payments, and powerful blockchain solutions. The W Chain Hybrid Blockchain's native cryptocurrency, W Coin (WCO), powers the next generation of decentralized apps, payments, and business solutions.
           </p>
+          
+          <div className="pt-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="group-hover:bg-primary/10 transition-colors duration-300"
+              onClick={() => window.open('https://w-chain.com/products/wco/', '_blank', 'noopener,noreferrer')}
+            >
+              Learn More <ExternalLink className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
