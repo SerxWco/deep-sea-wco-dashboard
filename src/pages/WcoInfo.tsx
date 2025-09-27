@@ -3,6 +3,9 @@ import { Button } from "@/components/ui/button";
 import { ExternalLink, Building2, Coins, BarChart3, FileText } from "lucide-react";
 import coinmarketBanner from "@/assets/coinmarket-banner.webp";
 import coingeckoBanner from "@/assets/coingecko-banner.webp";
+import bitmartLogo from "@/assets/bitmart-logo.webp";
+import mexcLogo from "@/assets/mexc-logo.webp";
+import bitrueLogo from "@/assets/bitrue-logo.webp";
 
 export default function WcoInfo() {
   const exchanges = [
@@ -10,25 +13,32 @@ export default function WcoInfo() {
       name: "Bitrue",
       type: "CEX",
       url: "https://www.bitrue.com/referral/landing?cn=600000&inviteCode=LHLAAG",
-      icon: Building2
+      icon: Building2,
+      logo: bitrueLogo,
+      hasLogo: true
     },
     {
       name: "MEXC",
       type: "CEX", 
       url: "https://promote.mexc.com/r/0HfW8sQC",
-      icon: Building2
+      icon: Building2,
+      logo: mexcLogo,
+      hasLogo: true
     },
     {
       name: "BitMart",
       type: "CEX",
       url: "https://www.bitmart.com/invite/Pdc9we/es",
-      icon: Building2
+      icon: Building2,
+      logo: bitmartLogo,
+      hasLogo: true
     },
     {
       name: "W-Swap",
       type: "DEX",
       url: "https://w-swap.com",
-      icon: Coins
+      icon: Coins,
+      hasLogo: false
     }
   ];
 
@@ -98,9 +108,19 @@ export default function WcoInfo() {
             return (
               <Card key={exchange.name} className="glass-ocean rounded-xl border-border/30 hover:border-primary/30 transition-all duration-300 group">
                 <CardContent className="p-6 text-center space-y-4">
-                  <div className="w-12 h-12 mx-auto bg-gradient-to-br from-primary/20 to-secondary/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <IconComponent className="w-6 h-6 text-primary" />
-                  </div>
+                  {exchange.hasLogo ? (
+                    <div className="w-full h-16 mx-auto flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                      <img 
+                        src={exchange.logo} 
+                        alt={exchange.name} 
+                        className="h-10 w-auto object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 mx-auto bg-gradient-to-br from-primary/20 to-secondary/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <IconComponent className="w-6 h-6 text-primary" />
+                    </div>
+                  )}
                   
                   <div className="space-y-2">
                     <h3 className="font-semibold text-foreground">{exchange.name}</h3>
