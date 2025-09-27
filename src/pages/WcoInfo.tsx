@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Building2, Coins, BarChart3 } from "lucide-react";
+import { ExternalLink, Building2, Coins, BarChart3, FileText } from "lucide-react";
+import coinmarketBanner from "@/assets/coinmarket-banner.webp";
 
 export default function WcoInfo() {
   const exchanges = [
@@ -35,13 +36,23 @@ export default function WcoInfo() {
       name: "CoinMarketCap",
       url: "https://coinmarketcap.com/currencies/wadzchain-coin/",
       icon: BarChart3,
-      description: "Real-time market data and analytics"
+      description: "Real-time market data and analytics",
+      hasBanner: true
     },
     {
       name: "CoinGecko", 
       url: "https://www.coingecko.com/en/coins/w-coin",
       icon: BarChart3,
       description: "Market insights and price tracking"
+    }
+  ];
+
+  const additionalInfo = [
+    {
+      name: "Tokenomics",
+      url: "https://w-chain.com/wchain-tokenomics/",
+      icon: FileText,
+      description: "Complete tokenomics and distribution details"
     }
   ];
 
@@ -119,9 +130,19 @@ export default function WcoInfo() {
             return (
               <Card key={platform.name} className="glass-ocean rounded-xl border-border/30 hover:border-primary/30 transition-all duration-300 group">
                 <CardContent className="p-6 text-center space-y-4">
-                  <div className="w-12 h-12 mx-auto bg-gradient-to-br from-primary/20 to-secondary/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <IconComponent className="w-6 h-6 text-primary" />
-                  </div>
+                  {platform.hasBanner ? (
+                    <div className="w-full h-16 mx-auto flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                      <img 
+                        src={coinmarketBanner} 
+                        alt="CoinMarketCap" 
+                        className="h-12 w-auto object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 mx-auto bg-gradient-to-br from-primary/20 to-secondary/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <IconComponent className="w-6 h-6 text-primary" />
+                    </div>
+                  )}
                   
                   <div className="space-y-2">
                     <h3 className="font-semibold text-foreground">{platform.name}</h3>
@@ -135,6 +156,36 @@ export default function WcoInfo() {
                     onClick={() => window.open(platform.url, '_blank', 'noopener,noreferrer')}
                   >
                     View Data <ExternalLink className="w-4 h-4 ml-2" />
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Additional Information */}
+        <div className="grid grid-cols-1 max-w-md mx-auto">
+          {additionalInfo.map((info) => {
+            const IconComponent = info.icon;
+            return (
+              <Card key={info.name} className="glass-ocean rounded-xl border-border/30 hover:border-primary/30 transition-all duration-300 group">
+                <CardContent className="p-6 text-center space-y-4">
+                  <div className="w-12 h-12 mx-auto bg-gradient-to-br from-primary/20 to-secondary/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <IconComponent className="w-6 h-6 text-primary" />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-foreground">{info.name}</h3>
+                    <p className="text-sm text-muted-foreground">{info.description}</p>
+                  </div>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full group-hover:bg-primary/10 transition-colors duration-300"
+                    onClick={() => window.open(info.url, '_blank', 'noopener,noreferrer')}
+                  >
+                    View Details <ExternalLink className="w-4 h-4 ml-2" />
                   </Button>
                 </CardContent>
               </Card>
