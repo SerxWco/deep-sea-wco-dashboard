@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Building2, Coins, BarChart3, FileText } from "lucide-react";
 import coinmarketBanner from "@/assets/coinmarket-banner.webp";
+import coingeckoBanner from "@/assets/coingecko-banner.webp";
 
 export default function WcoInfo() {
   const exchanges = [
@@ -43,7 +44,8 @@ export default function WcoInfo() {
       name: "CoinGecko", 
       url: "https://www.coingecko.com/en/coins/w-coin",
       icon: BarChart3,
-      description: "Market insights and price tracking"
+      description: "Market insights and price tracking",
+      hasBanner: true
     }
   ];
 
@@ -133,8 +135,8 @@ export default function WcoInfo() {
                   {platform.hasBanner ? (
                     <div className="w-full h-16 mx-auto flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
                       <img 
-                        src={coinmarketBanner} 
-                        alt="CoinMarketCap" 
+                        src={platform.name === "CoinMarketCap" ? coinmarketBanner : coingeckoBanner} 
+                        alt={platform.name} 
                         className="h-12 w-auto object-contain"
                       />
                     </div>
