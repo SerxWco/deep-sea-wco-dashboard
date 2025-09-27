@@ -51,11 +51,13 @@ export default function Wave() {
       {/* Additional Info */}
       <div className="glass-ocean rounded-2xl p-6 border border-border/30">
         <h3 className="text-lg font-semibold text-foreground mb-4">About WAVE Token</h3>
-        <div className="space-y-2 text-muted-foreground">
-          <p>• WAVE is a native token on the W-Chain ecosystem</p>
-          <p>• Price data is collected from W-Chain Oracle API every 15 minutes</p>
-          <p>• Historical data builds up over time to provide meaningful chart analysis</p>
-          <p>• Data is stored locally in your browser for fast access</p>
+        <div className="space-y-3 text-muted-foreground">
+          <p>WAVE is the native reward and incentive token at the heart of W Swap, W Chain's decentralized exchange. Designed to catalyze liquidity, user participation, and sustainable ecosystem growth, WAVE empowers users through liquidity mining, staking rewards, and future governance capabilities.</p>
+          <div className="space-y-2 mt-4 text-sm">
+            <p>• Price data is collected from W-Chain Oracle API every 15 minutes</p>
+            <p>• Historical data builds up over time to provide meaningful chart analysis</p>
+            <p>• Data is stored locally in your browser for fast access</p>
+          </div>
         </div>
       </div>
     </div>
