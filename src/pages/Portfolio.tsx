@@ -2,11 +2,15 @@ import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { useWChainTokens } from '@/hooks/useWChainTokens';
 import { useTokenBalances } from '@/hooks/useTokenBalances';
 import { useWalletTokenScanner } from '@/hooks/useWalletTokenScanner';
+import { usePortfolioHistory } from '@/hooks/usePortfolioHistory';
+import { usePortfolioPnL } from '@/hooks/usePortfolioPnL';
 import { WalletConnectButton } from '@/components/WalletConnectButton';
 import { WalletInfo } from '@/components/WalletInfo';
 import { TokenHoldings } from '@/components/TokenHoldings';
 import { AddCustomTokenForm } from '@/components/AddCustomTokenForm';
 import { PortfolioSummary } from '@/components/PortfolioSummary';
+import { PnLWidget } from '@/components/PnLWidget';
+import { PortfolioPerformanceChart } from '@/components/PortfolioPerformanceChart';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle } from 'lucide-react';
@@ -44,10 +48,27 @@ const Portfolio = () => {
     addCustomToken
   } = useWalletTokenScanner(walletInfo?.address || null, tokens);
 
+  // Portfolio performance tracking
+  const { createSnapshot } = usePortfolioHistory(walletInfo?.address || null);
+  const { metrics, chartData } = usePortfolioPnL(allBalances, walletInfo?.address || null);
+
   const handleRefreshPortfolio = () => {
     refreshTokens();
     refetchBalances();
     scanWallet();
+    
+    // Create portfolio snapshot after refresh
+    if (walletInfo?.address && allBalances.length > 0) {
+      const totalValue = allBalances.reduce((sum, balance) => {
+        const priceValue = parseFloat(balance.token.exchange_rate || '0');
+        if (priceValue > 0) {
+          return sum + (priceValue * balance.balanceInEth);
+        }
+        return sum + (balance.usdValue || 0);
+      }, 0);
+      
+      createSnapshot(walletInfo.address, totalValue, allBalances);
+    }
   };
 
   return (
@@ -113,6 +134,18 @@ const Portfolio = () => {
                   walletInfo={walletInfo}
                   onDisconnect={disconnectWallet}
                 />
+
+                {/* Performance Widgets */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <PnLWidget
+                    metrics={metrics}
+                    loading={tokensLoading || balancesLoading || scannerLoading}
+                  />
+                  <PortfolioPerformanceChart
+                    data={chartData}
+                    loading={tokensLoading || balancesLoading || scannerLoading}
+                  />
+                </div>
 
                 {/* Token Holdings with Tabs */}
                 <Tabs defaultValue="all" className="w-full">

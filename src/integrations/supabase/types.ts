@@ -68,6 +68,36 @@ export type Database = {
         }
         Relationships: []
       }
+      portfolio_snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          snapshot_date: string
+          snapshot_time: string
+          token_holdings: Json
+          total_value_usd: number
+          wallet_address: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          snapshot_date: string
+          snapshot_time?: string
+          token_holdings?: Json
+          total_value_usd?: number
+          wallet_address: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          snapshot_date?: string
+          snapshot_time?: string
+          token_holdings?: Json
+          total_value_usd?: number
+          wallet_address?: string
+        }
+        Relationships: []
+      }
       price_history: {
         Row: {
           created_at: string
