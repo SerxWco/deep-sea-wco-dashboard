@@ -16,7 +16,6 @@ import {
   DollarSign, 
   TrendingUp, 
   BarChart3, 
-  Target, 
   Activity,
   Users,
   UserCheck,
@@ -164,22 +163,9 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Middle Row - Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <TradingViewWidget height="500px" />
-          </div>
-          
-          <CryptoMetricCard
-            title="All-Time High"
-            value={data ? formatCurrency(data.ath) : loading ? "Loading..." : "$0.0000"}
-            change={data ? { 
-              value: `${((data.current_price / data.ath - 1) * 100).toFixed(1)}% from ATH`, 
-              isPositive: false 
-            } : undefined}
-            icon={<Target className="h-6 w-6" />}
-            className="h-full flex flex-col justify-center"
-          />
+        {/* Charts */}
+        <div className="w-full">
+          <TradingViewWidget height="500px" />
         </div>
 
         {/* Network Statistics */}
