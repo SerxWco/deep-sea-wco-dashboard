@@ -1,6 +1,14 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Building2, Coins, BarChart3, FileText } from "lucide-react";
+import { ExternalLink, Building2, Coins, BarChart3, FileText, RefreshCw } from "lucide-react";
+import { DailyReportGenerator } from "@/components/DailyReportGenerator";
+import { useWCOMarketData } from "@/hooks/useWCOMarketData";
+import { useWChainNetworkStats } from "@/hooks/useWChainNetworkStats";
+import { useWalletLeaderboard } from "@/hooks/useWalletLeaderboard";
+import { useWCOBurnTracker } from "@/hooks/useWCOBurnTracker";
+import { useWCOSupplyInfo } from "@/hooks/useWCOSupplyInfo";
+import { saveDailyMetrics, getDailyComparison } from "@/utils/dailyComparisons";
 import coinmarketBanner from "@/assets/coinmarket-banner.webp";
 import coingeckoBanner from "@/assets/coingecko-banner.webp";
 import bitmartLogo from "@/assets/bitmart-logo.webp";
@@ -8,6 +16,76 @@ import mexcLogo from "@/assets/mexc-logo.webp";
 import bitrueLogo from "@/assets/bitrue-logo.webp";
 
 export default function WcoInfo() {
+  const { data, loading } = useWCOMarketData();
+  const { totalFetched: totalHolders, loading: holdersLoading } = useWalletLeaderboard();
+  const { data: networkStats, loading: networkLoading } = useWChainNetworkStats(totalHolders);
+  const { data: burnData, loading: burnLoading } = useWCOBurnTracker();
+  const { data: supplyData, loading: supplyLoading } = useWCOSupplyInfo();
+  
+  const [showReportGenerator, setShowReportGenerator] = useState(false);
+  const [dailyComparison, setDailyComparison] = useState<any>(null);
+
+  // Calculate daily comparison data asynchronously
+  useEffect(() => {
+    const fetchComparison = async () => {
+      if (data && networkStats && burnData && supplyData) {
+        const comparison = await getDailyComparison({
+          totalHolders,
+          transactions24h: networkStats.transactions24h,
+          wcoMoved24h: networkStats.wcoMoved24h,
+          activeWallets: networkStats.activeWallets,
+          averageTransactionSize: networkStats.averageTransactionSize,
+          networkActivityRate: networkStats.networkActivityRate,
+          marketCap: data.market_cap,
+          circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
+          wcoBurntTotal: burnData.totalBurnt,
+          wcoBurnt24h: burnData.burnt24h || 0
+        });
+        setDailyComparison(comparison);
+      }
+    };
+
+    fetchComparison();
+  }, [data, networkStats, burnData, supplyData, totalHolders]);
+
+  // Save daily metrics when data is available
+  useEffect(() => {
+    if (data && networkStats && burnData && supplyData && !loading && !networkLoading && !burnLoading && !supplyLoading) {
+      saveDailyMetrics({
+        totalHolders,
+        transactions24h: networkStats.transactions24h,
+        wcoMoved24h: networkStats.wcoMoved24h,
+        activeWallets: networkStats.activeWallets,
+        averageTransactionSize: networkStats.averageTransactionSize,
+        networkActivityRate: networkStats.networkActivityRate,
+        marketCap: data.market_cap,
+        circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
+        wcoBurntTotal: burnData.totalBurnt,
+        wcoBurnt24h: burnData.burnt24h || 0
+      });
+    }
+  }, [data, networkStats, burnData, supplyData, totalHolders, loading, networkLoading, burnLoading, supplyLoading]);
+
+  // Generate report data
+  const getReportData = () => {
+    if (!data || !networkStats || !burnData || !supplyData) return null;
+    
+    return {
+      totalHolders,
+      holdersChange: dailyComparison?.totalHolders?.change || 0,
+      transactions24h: networkStats.transactions24h,
+      transactionsChange: dailyComparison?.transactions24h?.change || 0,
+      wcoMoved24h: networkStats.wcoMoved24h,
+      wcoMovedChange: dailyComparison?.wcoMoved24h?.change || 0,
+      circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
+      circulatingSupplyChange: dailyComparison?.circulatingSupply?.change || 0,
+      marketCap: data.market_cap,
+      marketCapChange: dailyComparison?.marketCap?.change || 0,
+      wcoBurnt: burnData.totalBurnt,
+      wcoBurntChange: dailyComparison?.wcoBurntTotal?.change || 0
+    };
+  };
+  
   const exchanges = [
     {
       name: "Bitrue",
@@ -71,11 +149,28 @@ export default function WcoInfo() {
   return (
     <div className="space-y-8 p-6">
       {/* Header */}
-      <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
-          WCO Information
-        </h1>
-        <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+              WCO Information
+            </h1>
+            {(loading || networkLoading || burnLoading || supplyLoading || holdersLoading) && (
+              <RefreshCw className="h-5 w-5 text-accent animate-spin" />
+            )}
+          </div>
+          
+          <Button 
+            onClick={() => setShowReportGenerator(true)}
+            className="flex items-center gap-2"
+            variant="outline"
+            disabled={!data || !networkStats || !burnData || !supplyData}
+          >
+            <FileText className="h-4 w-4" />
+            Generate Daily Report
+          </Button>
+        </div>
+        <p className="text-muted-foreground text-lg max-w-2xl">
           Learn about W Coin (WCO) and where to buy it
         </p>
       </div>
@@ -226,6 +321,12 @@ export default function WcoInfo() {
           })}
         </div>
       </div>
+
+      <DailyReportGenerator 
+        isOpen={showReportGenerator}
+        onOpenChange={setShowReportGenerator}
+        reportData={getReportData()}
+      />
     </div>
   );
 }
