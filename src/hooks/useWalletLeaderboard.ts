@@ -1,14 +1,12 @@
-import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import { wchainGraphQL } from '@/services/wchainGraphQL';
 
 export interface WalletData {
   address: string;
   balance: number;
-  transactionCount?: number;
-  txCount?: number;
   category: string;
   emoji: string;
+  txCount: number;
   label?: string;
 }
 
@@ -16,7 +14,24 @@ export interface CategoryInfo {
   name: string;
   emoji: string;
   minBalance: number;
+  maxBalance?: number;
 }
+
+// Define all ocean creature categories in order from largest to smallest
+export const ALL_CATEGORIES: CategoryInfo[] = [
+  { name: 'Flagship', emoji: '🚩', minBalance: 0 }, // Team wallets
+  { name: 'Harbor', emoji: '⚓', minBalance: 0 }, // Exchange wallets
+  { name: 'Bridge/Wrapped', emoji: '🌉', minBalance: 0 }, // Wrapped contracts
+  { name: 'Kraken', emoji: '🦑', minBalance: 5000000 },
+  { name: 'Whale', emoji: '🐋', minBalance: 1000001, maxBalance: 4999999 },
+  { name: 'Shark', emoji: '🦈', minBalance: 500001, maxBalance: 1000000 },
+  { name: 'Dolphin', emoji: '🐬', minBalance: 100001, maxBalance: 500000 },
+  { name: 'Fish', emoji: '🐟', minBalance: 50001, maxBalance: 100000 },
+  { name: 'Octopus', emoji: '🐙', minBalance: 10001, maxBalance: 50000 },
+  { name: 'Crab', emoji: '🦀', minBalance: 1001, maxBalance: 10000 },
+  { name: 'Shrimp', emoji: '🦐', minBalance: 1, maxBalance: 1000 },
+  { name: 'Plankton', emoji: '🦠', minBalance: 0, maxBalance: 0.999 },
+];
 
 interface UseWalletLeaderboardReturn {
   wallets: WalletData[];
@@ -30,67 +45,57 @@ interface UseWalletLeaderboardReturn {
   allCategories: CategoryInfo[];
 }
 
-export const ALL_CATEGORIES: CategoryInfo[] = [
-  { name: 'Flagship', emoji: '🏆', minBalance: Infinity },
-  { name: 'Harbor', emoji: '⚓', minBalance: Infinity },
-  { name: 'Kraken', emoji: '🦑', minBalance: 5000000 },
-  { name: 'Whale', emoji: '🐋', minBalance: 1000001 },
-  { name: 'Shark', emoji: '🦈', minBalance: 500001 },
-  { name: 'Dolphin', emoji: '🐬', minBalance: 100001 },
-  { name: 'Fish', emoji: '🐟', minBalance: 50001 },
-  { name: 'Octopus', emoji: '🐙', minBalance: 10001 },
-  { name: 'Crab', emoji: '🦀', minBalance: 1001 },
-  { name: 'Shrimp', emoji: '🦐', minBalance: 1 },
-  { name: 'Plankton', emoji: '🦠', minBalance: 0 },
+// Define special wallets
+const FLAGSHIP_WALLETS: Record<string, string> = {
+  "0xfac510d5db8cadff323d4b979d898dc38f3fb6df": "Validation Nodes",
+  "0x511a6355407bb78f26172db35100a87b9be20fc3": "Liquidity Provision",
+  "0x2ca9472add8a02c74d50fc3ea444548502e35bdb": "Marketing & Community",
+  "0xa306799ee31c7f89d3ff82d3397972933d57d679": "Premium Account Features",
+  "0x94dbff05e1c129869772e1fb291901083cdadef1": "W Chain Ecosystem",
+  "0x58213dd561d12a0ea7b538b1b26de34dace1d0f0": "Developer Incentives",
+  "0x13768af351b4627dce8de6a67e59e4b27b4cbf5d": "Exchange Listings",
+  "0xa237feafa2bac4096867af6229a2370b7a661a5f": "Incentives",
+  "0xfc06231e2e448b778680202bea8427884c011341": "Institutional Sales",
+  "0x80eabd19b84b4f5f042103e957964297589c657d": "Enterprises & Partnerships",
+  "0x57ab15ca8bd528d509dbc81d11e9beca44f3445f": "Development Fund",
+  "0xba9be06936c806aefad981ae96fa4d599b78ad24": "WTK Conversion / Total Supply",
+  "0x67f2696c125d8d1307a5ae17348a440718229d03": "Treasury Wallet",
+  "0x81d29c0DcD64fAC05C4A394D455cbD79D210C200": "Buybacks",
+};
+
+const EXCHANGE_WALLETS: Record<string, string> = {
+  "0x6cc8dcbca746a6e4fdefb98e1d0df903b107fd21": "Bitrue Exchange",
+  "0x2802e182d5a15df915fd0363d8f1adfd2049f9ee": "MEXC Exchange", 
+  "0x430d2ada8140378989d20eae6d48ea05bbce2977": "Bitmart Exchange",
+};
+
+export { EXCHANGE_WALLETS };
+
+const WRAPPED_WCO = [
+  "0xedb8008031141024d50ca2839a607b2f82c1c045"
 ];
 
-export const FLAGSHIP_WALLETS: Record<string, string> = {
-  '0x1d2f0da169ceb9fc7b3144628db156f3f6c60dbe': 'Binance Hot Wallet',
-  '0x28c6c06298d514db089934071355e5743bf21d60': 'Binance Hot Wallet 2',
-  '0xdfd5293d8e347dfe59e90efd55b2956a1343963d': 'Binance Hot Wallet 3',
-  '0x56eddb7aa87536c09ccc2793473599fd21a8b17f': 'Binance Hot Wallet 4',
-  '0x9696f59e4d72e237be84ffd425dcad154bf96976': 'Binance Hot Wallet 5',
-  '0x4976a4a02f38326660d17bf34b431dc6e2eb2327': 'Binance Wallet 6',
-  '0xd551234ae421e3bcba99a0da6d736074f22192ff': 'Binance Wallet 7',
-  '0x4e9ce36e442e55ecd9025b9a6e0d88485d628a67': 'Binance Wallet 8',
-  '0xbe0eb53f46cd790cd13851d5eff43d12404d33e8': 'Binance Wallet 9',
-  '0xf977814e90da44bfa03b6295a0616a897441acec': 'Binance Wallet 10',
-  '0x001866ae5b3de6caa5a51543fd9fb64f524f5478': 'Binance Wallet 11',
-  '0x85b931a32a0725be14285b66f1a22178c672d69b': 'Binance Wallet 12',
-  '0x708396f17127c42383e3b9014072679b2f60b82f': 'Binance Wallet 13',
-  '0xe0f0cfde7ee664943906f17f7f14342e76a5cec7': 'Binance Wallet 14',
-  '0x8f22f2063d253846b53609231ed80fa571bc0c8f': 'Binance Wallet 15',
-  '0x0681d8db095565fe8a346fa0277bffde9c0edbbf': 'Binance Wallet 16',
-};
-
-export const EXCHANGE_WALLETS: Record<string, string> = {
-  '0x46340b20830761efd32832a74d7169b29feb9758': 'Bitrue Hot Wallet',
-  '0x5c985e89dde482efe97ea9f1950ad149eb73829b': 'MEXC Hot Wallet',
-  '0x0211f3cedbef3143223d3acf0e589747933e8527': 'BitMart Hot Wallet',
-  '0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45': 'Uniswap Router V3',
-  '0x7a250d5630b4cf539739df2c5dacb4c659f2488d': 'Uniswap Router V2',
-};
-
 const categorizeWallet = (balance: number, address: string): { category: string; emoji: string; label?: string } => {
-  if (!address) return { category: 'Plankton', emoji: '🦠' };
-  const lowerAddress = address.toLowerCase();
-  
-  if (FLAGSHIP_WALLETS[lowerAddress]) {
-    return { 
-      category: 'Flagship', 
-      emoji: '🏆',
-      label: FLAGSHIP_WALLETS[lowerAddress]
-    };
+  const addr = address.toLowerCase();
+
+  // Check if address is a flagship wallet (team wallet)
+  const flagshipLabel = FLAGSHIP_WALLETS[addr];
+  if (flagshipLabel) {
+    return { category: 'Flagship', emoji: '🚩', label: flagshipLabel };
   }
-  
-  if (EXCHANGE_WALLETS[lowerAddress]) {
-    return { 
-      category: 'Harbor', 
-      emoji: '⚓',
-      label: EXCHANGE_WALLETS[lowerAddress]
-    };
+
+  // Check if address is an exchange wallet
+  const exchangeLabel = EXCHANGE_WALLETS[addr];
+  if (exchangeLabel) {
+    return { category: 'Harbor', emoji: '⚓', label: exchangeLabel };
   }
-  
+
+  // Check if address is wrapped WCO contract
+  if (WRAPPED_WCO.includes(addr)) {
+    return { category: 'Bridge/Wrapped', emoji: '🌉', label: 'Wrapped WCO Contract' };
+  }
+
+  // Ocean Creatures categorization by balance
   if (balance >= 5000000) return { category: 'Kraken', emoji: '🦑' };
   if (balance >= 1000001) return { category: 'Whale', emoji: '🐋' };
   if (balance >= 500001) return { category: 'Shark', emoji: '🦈' };
@@ -103,97 +108,287 @@ const categorizeWallet = (balance: number, address: string): { category: string;
 };
 
 export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
-  const queryClient = useQueryClient();
+  const [wallets, setWallets] = useState<WalletData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
 
-  const { data: wallets = [], isLoading: loading, error: queryError, refetch } = useQuery({
-    queryKey: ['walletLeaderboard'],
-    queryFn: async (): Promise<WalletData[]> => {
-      const allWallets: WalletData[] = [];
-      
-      try {
-        // Fetch from REST API since GraphQL getLeaderboard doesn't exist
-        const response = await fetch('https://scan.w-chain.com/api/v2/addresses?items_count=1000');
-        if (!response.ok) throw new Error('Failed to fetch leaderboard');
-        
-        const graphqlData = await response.json();
-        
-        if (graphqlData?.items) {
-          const graphqlWallets = graphqlData.items
-            .filter((holder: any) => {
-              const hasBalance = holder.coin_balance && parseFloat(holder.coin_balance) > 0;
-              const hasAddress = holder.hash || holder.address;
-              return hasBalance && hasAddress;
-            })
-            .map((holder: any) => {
-              const balanceWei = parseFloat(holder.coin_balance) || 0;
-              const balance = balanceWei / 1e18;
-              const address = holder.hash || holder.address;
-              const { category, emoji, label } = categorizeWallet(balance, address);
-              
-              return {
-                address,
-                balance,
-                transactionCount: parseInt(holder.transactions_count || holder.tx_count) || 0,
-                category,
-                emoji,
-                label,
-              };
-            });
-          
-          allWallets.push(...graphqlWallets);
-        }
-        
-        // Ensure flagship wallets are included
-        const flagshipAddresses = Object.keys(FLAGSHIP_WALLETS);
-        for (const address of flagshipAddresses) {
-          if (!allWallets.find(w => w.address.toLowerCase() === address.toLowerCase())) {
-            try {
-              const response = await fetch(`https://api.w-chain.com/api/holders/${address}`);
-              if (response.ok) {
-                const data = await response.json();
-                if (data.balance) {
-                  const balance = parseFloat(data.balance);
-                  allWallets.push({
-                    address: data.address,
-                    balance,
-                    transactionCount: data.transactionCount || 0,
-                    category: 'Flagship',
-                    emoji: '🏆',
-                    label: FLAGSHIP_WALLETS[address as keyof typeof FLAGSHIP_WALLETS],
-                  });
-                }
-              }
-            } catch (err) {
-              console.warn(`Failed to fetch flagship wallet ${address}:`, err);
-            }
-          }
-        }
-        
-        return allWallets.sort((a, b) => b.balance - a.balance);
-      } catch (err) {
-        console.error('Error fetching wallet leaderboard:', err);
-        throw err;
+  // Lightweight in-memory cache (resets on reload)
+  // Serves both Ocean Creatures and Kraken watchlist quickly
+  const CACHE_TTL_MS = 60_000; // 60s
+  // Note: module-level singleton to share across hook instances
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyGlobal = globalThis as any;
+  if (!anyGlobal.__LEADERBOARD_CACHE__) {
+    anyGlobal.__LEADERBOARD_CACHE__ = { ts: 0, data: [] as WalletData[] };
+  }
+  const LEADERBOARD_CACHE: { ts: number; data: WalletData[] } = anyGlobal.__LEADERBOARD_CACHE__;
+
+  // Function to fetch a specific wallet by address
+  const fetchSpecificWallet = async (address: string): Promise<WalletData | null> => {
+    try {
+      const response = await fetch(`https://scan.w-chain.com/api/v2/addresses/${address}`);
+      if (!response.ok) {
+        console.warn(`Failed to fetch wallet ${address}: ${response.status}`);
+        return null;
       }
-    },
-    staleTime: 15 * 60 * 1000, // 15 minutes
-    gcTime: 30 * 60 * 1000,
-  });
 
-  const error = queryError ? String(queryError) : null;
+      const account = await response.json();
+      if (!account) return null;
 
-  const loadMore = () => {
-    setLoadingMore(false);
-    setHasMore(false);
+      const balanceWei = parseFloat(account.coin_balance) || 0;
+      const balance = balanceWei / 1e18;
+      const { category, emoji, label } = categorizeWallet(balance, account.hash);
+      
+      return {
+        address: account.hash,
+        balance,
+        category,
+        emoji,
+        txCount: parseInt(account.transaction_count || account.tx_count) || 0,
+        label,
+      };
+    } catch (error) {
+      console.warn(`Error fetching specific wallet ${address}:`, error);
+      return null;
+    }
   };
+
+  const fetchWalletData = async (isLoadMore: boolean = false) => {
+    try {
+      if (isLoadMore) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+        setError(null);
+        setHasMore(true);
+
+        // Serve from short-lived cache for instant UX if available
+        const now = Date.now();
+        if (!isLoadMore && LEADERBOARD_CACHE.data.length > 0 && (now - LEADERBOARD_CACHE.ts) < CACHE_TTL_MS) {
+          setWallets(LEADERBOARD_CACHE.data);
+          setHasMore(false);
+          setLoading(false);
+          setLoadingMore(false);
+          return;
+        }
+        setWallets([]);
+      }
+      
+      let allWallets: WalletData[] = isLoadMore ? wallets : [];
+      const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
+      let url = `${baseUrl}?items_count=100`;
+      let keepFetching = true;
+
+      // 1) Fast path: GraphQL (fetch top addresses in one request)
+      try {
+        const graphOK = await wchainGraphQL.testConnection();
+        if (graphOK && !isLoadMore) {
+          console.log('Using GraphQL fast-path for leaderboard');
+          const result = await wchainGraphQL.getNetworkStats(5000);
+          const processedWallets: WalletData[] = result.addresses.items.map((account: any) => {
+            const balanceWei = parseFloat(account.coinBalance) || 0;
+            const balance = balanceWei / 1e18;
+            const { category, emoji, label } = categorizeWallet(balance, account.hash);
+            return {
+              address: account.hash,
+              balance,
+              category,
+              emoji,
+              txCount: parseInt(account.transactionsCount) || 0,
+              label,
+            };
+          });
+
+          allWallets = processedWallets;
+          setWallets([...allWallets]);
+          setHasMore(false);
+
+          // Save to cache
+          LEADERBOARD_CACHE.data = [...allWallets];
+          LEADERBOARD_CACHE.ts = Date.now();
+
+          return; // done
+        }
+      } catch (e) {
+        console.warn('GraphQL fast-path failed, falling back to REST:', e);
+      }
+
+      // 2) Fallback: REST paginated crawl - fetch first 50 pages to get more wallets
+      let pageCount = 0;
+      const maxInitialPages = 50;
+      
+      while (keepFetching && pageCount < maxInitialPages) {
+        console.log(`Fetching page ${pageCount + 1}:`, url);
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (!result || !result.items || !Array.isArray(result.items)) {
+          console.warn('No more data from API, stopping fetch');
+          break;
+        }
+
+        // Stop if API returns empty results (no more data)
+        if (result.items.length === 0) {
+          console.log('API returned empty results, stopping fetch');
+          break;
+        }
+
+        const processedWallets: WalletData[] = result.items.map((account: any) => {
+          // Convert coin_balance from wei to WCO (divide by 1e18)
+          const balanceWei = parseFloat(account.coin_balance) || 0;
+          const balance = balanceWei / 1e18;
+          const { category, emoji, label } = categorizeWallet(balance, account.hash);
+          
+          return {
+            address: account.hash,
+            balance,
+            category,
+            emoji,
+            txCount: parseInt(account.transaction_count || account.tx_count) || 0,
+            label,
+          };
+        });
+
+        // Add new batch of wallets
+        allWallets = [...allWallets, ...processedWallets];
+        
+        // Update UI with current batch for progressive loading
+        setWallets([...allWallets]);
+        
+        pageCount++;
+        
+        // Check if more pages exist
+        if (result.next_page_params) {
+          const params = new URLSearchParams(result.next_page_params).toString();
+          url = `${baseUrl}?items_count=100&${params}`;
+        } else {
+          keepFetching = false;
+        }
+        
+        console.log(`Fetched page ${pageCount}, total wallets: ${allWallets.length}, processed: ${processedWallets.length}`);
+        
+        // Add small delay between requests to avoid overwhelming the API
+        if (keepFetching && pageCount < maxInitialPages) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+
+      // Verify all flagship wallets are present
+      console.log('Verifying flagship wallets...');
+      const flagshipAddresses = Object.keys(FLAGSHIP_WALLETS);
+      const foundFlagships = allWallets.filter(w => flagshipAddresses.includes(w.address.toLowerCase()));
+      const missingFlagships = flagshipAddresses.filter(addr => 
+        !foundFlagships.some(w => w.address.toLowerCase() === addr.toLowerCase())
+      );
+
+      console.log(`Found ${foundFlagships.length}/${flagshipAddresses.length} flagship wallets`);
+      
+      if (missingFlagships.length > 0) {
+        console.log('Fetching missing flagship wallets:', missingFlagships);
+        
+        for (const address of missingFlagships) {
+          const wallet = await fetchSpecificWallet(address);
+          if (wallet) {
+            allWallets.push(wallet);
+            console.log(`✅ Added missing flagship wallet: ${wallet.label || address}`);
+          }
+          // Small delay between requests
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+        // Update UI with flagship wallets added
+        setWallets([...allWallets]);
+      }
+
+      setHasMore(false);
+      // Save to cache
+      LEADERBOARD_CACHE.data = [...allWallets];
+      LEADERBOARD_CACHE.ts = Date.now();
+      
+    } catch (err) {
+      console.error('Error fetching wallet data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch wallet data');
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMore = async () => {
+    if (!hasMore || loadingMore) return;
+    
+    setLoadingMore(true);
+    try {
+      const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
+      // Calculate next page URL based on current wallet count
+      const currentCount = wallets.length;
+      let url = `${baseUrl}?items_count=100&offset=${currentCount}`;
+      
+      console.log(`Loading more wallets from offset ${currentCount}`);
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result?.items || result.items.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      const processedWallets: WalletData[] = result.items.map((account: any) => {
+        const balanceWei = parseFloat(account.coin_balance) || 0;
+        const balance = balanceWei / 1e18;
+        const { category, emoji, label } = categorizeWallet(balance, account.hash);
+        
+        return {
+          address: account.hash,
+          balance,
+          category,
+          emoji,
+          txCount: parseInt(account.transaction_count || account.tx_count) || 0,
+          label,
+        };
+      });
+
+      const updatedWallets = [...wallets, ...processedWallets];
+      setWallets(updatedWallets);
+      
+      // Update cache
+      LEADERBOARD_CACHE.data = updatedWallets;
+      LEADERBOARD_CACHE.ts = Date.now();
+      
+      // Check if more data available
+      setHasMore(!!result.next_page_params);
+      
+      console.log(`Loaded ${processedWallets.length} more wallets, total: ${updatedWallets.length}`);
+    } catch (err) {
+      console.error('Error loading more wallets:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load more wallets');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWalletData();
+  }, []);
 
   return { 
     wallets, 
     loading, 
     loadingMore,
     error, 
-    refetch: () => { refetch(); },
+    refetch: () => fetchWalletData(false),
     loadMore,
     hasMore,
     totalFetched: wallets.length,

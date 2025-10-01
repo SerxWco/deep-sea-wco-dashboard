@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useWChainPriceAPI } from './useWChainPriceAPI';
 import { useWCOSupplyInfo } from './useWCOSupplyInfo';
 

@@ -23,7 +23,7 @@ import {
 export default function Dashboard() {
   const { data, loading, error } = useWCOMarketData();
   const { totalFetched: totalHolders, loading: holdersLoading } = useWalletLeaderboard();
-  const { data: networkStats, loading: networkLoading, error: networkError } = useWChainNetworkStats();
+  const { data: networkStats, loading: networkLoading, error: networkError } = useWChainNetworkStats(totalHolders);
   const { data: burnData, loading: burnLoading, error: burnError } = useWCOBurnTracker();
   const { data: supplyData, loading: supplyLoading, error: supplyError } = useWCOSupplyInfo();
   const { wcoPrice, wavePrice, loading: priceLoading, error: priceError } = useWChainPriceAPI();
@@ -128,7 +128,7 @@ export default function Dashboard() {
           
           <CryptoMetricCard
             title="Avg Transaction Size"
-            value={networkStats ? `${networkStats.avgTransactionSize} WCO` : networkLoading ? "..." : "N/A"}
+            value={networkStats ? `${networkStats.averageTransactionSize} WCO` : networkLoading ? "..." : "N/A"}
             icon={<BarChart3 className="h-5 w-5" />}
           />
         </div>

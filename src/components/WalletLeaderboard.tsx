@@ -218,7 +218,7 @@ export function WalletLeaderboard() {
                                        </div>
                                      )}
                                      <div className="text-xs text-muted-foreground">
-                                       {(wallet.txCount ?? wallet.transactionCount ?? 0).toLocaleString()} txns
+                                       {wallet.txCount.toLocaleString()} txns
                                      </div>
                                    </div>
                                </div>
@@ -265,16 +265,22 @@ export function WalletLeaderboard() {
               >
                 Load More Wallets
               </Button>
-            )}
+      )}
+      
+      {/* Wallet Details Modal */}
+      <WalletDetailsModal
+        isOpen={selectedWallet !== null}
+        onClose={() => setSelectedWallet(null)}
+        address={selectedWallet}
+      />
+    </div>
+        )}
+
+        {!hasMore && wallets.length > 0 && (
+          <div className="text-center py-4 text-muted-foreground text-sm">
+            🎉 All available wallets loaded ({totalFetched.toLocaleString()} total)
           </div>
         )}
-        
-        {/* Wallet Details Modal */}
-        <WalletDetailsModal
-          isOpen={selectedWallet !== null}
-          onClose={() => setSelectedWallet(null)}
-          address={selectedWallet}
-        />
       </CardContent>
     </Card>
   );
