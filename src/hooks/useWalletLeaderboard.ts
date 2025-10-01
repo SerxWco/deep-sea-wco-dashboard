@@ -72,6 +72,7 @@ export const EXCHANGE_WALLETS: Record<string, string> = {
 };
 
 const categorizeWallet = (balance: number, address: string): { category: string; emoji: string; label?: string } => {
+  if (!address) return { category: 'Plankton', emoji: '🦠' };
   const lowerAddress = address.toLowerCase();
   
   if (FLAGSHIP_WALLETS[lowerAddress]) {
@@ -120,14 +121,19 @@ export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
         
         if (graphqlData?.items) {
           const graphqlWallets = graphqlData.items
-            .filter((holder: any) => holder.coin_balance && parseFloat(holder.coin_balance) > 0)
+            .filter((holder: any) => {
+              const hasBalance = holder.coin_balance && parseFloat(holder.coin_balance) > 0;
+              const hasAddress = holder.hash || holder.address;
+              return hasBalance && hasAddress;
+            })
             .map((holder: any) => {
               const balanceWei = parseFloat(holder.coin_balance) || 0;
               const balance = balanceWei / 1e18;
-              const { category, emoji, label } = categorizeWallet(balance, holder.address);
+              const address = holder.hash || holder.address;
+              const { category, emoji, label } = categorizeWallet(balance, address);
               
               return {
-                address: holder.hash,
+                address,
                 balance,
                 transactionCount: parseInt(holder.transactions_count || holder.tx_count) || 0,
                 category,
