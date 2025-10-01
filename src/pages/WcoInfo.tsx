@@ -18,7 +18,7 @@ import bitrueLogo from "@/assets/bitrue-logo.webp";
 export default function WcoInfo() {
   const { data, loading } = useWCOMarketData();
   const { totalFetched: totalHolders, loading: holdersLoading } = useWalletLeaderboard();
-  const { data: networkStats, loading: networkLoading } = useWChainNetworkStats(totalHolders);
+  const { data: networkStats, loading: networkLoading } = useWChainNetworkStats();
   const { data: burnData, loading: burnLoading } = useWCOBurnTracker();
   const { data: supplyData, loading: supplyLoading } = useWCOSupplyInfo();
   
@@ -34,8 +34,8 @@ export default function WcoInfo() {
           transactions24h: networkStats.transactions24h,
           wcoMoved24h: networkStats.wcoMoved24h,
           activeWallets: networkStats.activeWallets,
-          averageTransactionSize: networkStats.averageTransactionSize,
-          networkActivityRate: networkStats.networkActivityRate,
+          averageTransactionSize: networkStats.avgTransactionSize,
+          networkActivityRate: 0,
           marketCap: data.market_cap,
           circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
           wcoBurntTotal: burnData.totalBurnt,
@@ -56,8 +56,8 @@ export default function WcoInfo() {
         transactions24h: networkStats.transactions24h,
         wcoMoved24h: networkStats.wcoMoved24h,
         activeWallets: networkStats.activeWallets,
-        averageTransactionSize: networkStats.averageTransactionSize,
-        networkActivityRate: networkStats.networkActivityRate,
+        averageTransactionSize: networkStats.avgTransactionSize,
+        networkActivityRate: 0,
         marketCap: data.market_cap,
         circulatingSupply: parseFloat(supplyData.summary.circulating_supply_wco),
         wcoBurntTotal: burnData.totalBurnt,

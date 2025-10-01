@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { wchainGraphQL } from '@/services/wchainGraphQL';
 
 interface NetworkStats {
@@ -33,8 +33,7 @@ interface WChainNetworkStats {
   transactions24h: number;
   wcoMoved24h: number;
   activeWallets: number;
-  averageTransactionSize: number;
-  networkActivityRate: number;
+  avgTransactionSize: number;
 }
 
 interface UseWChainNetworkStatsReturn {
@@ -43,196 +42,124 @@ interface UseWChainNetworkStatsReturn {
   error: string | null;
 }
 
-const W_CHAIN_API_BASE = 'https://scan.w-chain.com/api/v2';
-
-// Consider a wallet active if it has transacted in the last 7 days
-const ACTIVE_WALLET_THRESHOLD = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-
-// Minimum balance to be considered a holder (in Wei)
 const MIN_HOLDER_BALANCE = 1000000000000000000; // 1 WCO in Wei
 
-export const useWChainNetworkStats = (totalTrackedWallets: number = 0): UseWChainNetworkStatsReturn => {
-  const [data, setData] = useState<WChainNetworkStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export const useWChainNetworkStats = (): UseWChainNetworkStatsReturn => {
+  const { data, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['wchainNetworkStats'],
+    queryFn: async (): Promise<WChainNetworkStats | null> => {
+      try {
+        // Try GraphQL first
+        // GraphQL approach - use getNetworkStats with proper parsing
+        const isGraphQLAvailable = await wchainGraphQL.testConnection();
+        
+        if (isGraphQLAvailable) {
+          const graphqlData = await wchainGraphQL.getNetworkStats(1000);
+          
+          if (graphqlData?.transactions?.items) {
+            const now = Date.now();
+            const oneDayAgo = now - 24 * 60 * 60 * 1000;
+            
+            const recentTxs = graphqlData.transactions.items.filter((tx: any) => 
+              tx.timestamp && new Date(tx.timestamp).getTime() > oneDayAgo
+            );
+            
+            const wcoMoved24h = recentTxs.reduce((sum: number, tx: any) => {
+              const value = parseFloat(tx.value || '0') / 1e18;
+              return sum + (isNaN(value) ? 0 : value);
+            }, 0);
+            
+            const uniqueAddresses = new Set<string>();
+            recentTxs.forEach((tx: any) => {
+              if (tx.from?.hash) uniqueAddresses.add(tx.from.hash.toLowerCase());
+              if (tx.to?.hash) uniqueAddresses.add(tx.to.hash.toLowerCase());
+            });
+            
+            return {
+              totalHolders: graphqlData.addresses?.items?.length || 0,
+              transactions24h: recentTxs.length,
+              wcoMoved24h,
+              activeWallets: uniqueAddresses.size,
+              avgTransactionSize: recentTxs.length > 0 ? wcoMoved24h / recentTxs.length : 0,
+            };
+          }
+        }
+        
+        // Fallback to REST API
+        const [statsResponse, addressResponse, txResponse] = await Promise.all([
+          fetch('https://api.w-chain.com/api/stats'),
+          fetch('https://api.w-chain.com/api/addresses?page=1&limit=100'),
+          fetch('https://api.w-chain.com/api/transactions?page=1&limit=100')
+        ]);
 
-  const fetchNetworkStats = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+        if (!statsResponse.ok) {
+          throw new Error('Failed to fetch network stats');
+        }
 
-      // Try GraphQL first, fallback to REST if not available
-      const isGraphQLAvailable = await wchainGraphQL.testConnection();
-      
-      if (isGraphQLAvailable) {
-        console.log('Using GraphQL API for network stats');
-        await fetchNetworkStatsGraphQL();
-      } else {
-        console.log('GraphQL not available, using REST API');
-        await fetchNetworkStatsREST();
+        const statsData: NetworkStats = await statsResponse.json();
+        let addressData: AddressData[] = [];
+        let txData: TransactionData[] = [];
+
+        if (addressResponse.ok) {
+          const addressJson = await addressResponse.json();
+          addressData = addressJson.items || [];
+        }
+        
+        if (txResponse.ok) {
+          const txJson = await txResponse.json();
+          txData = txJson.items || [];
+        }
+
+        const now = Date.now();
+        const oneDayAgo = now - 24 * 60 * 60 * 1000;
+        
+        const recentTxs = txData.filter(tx => 
+          tx.timestamp && new Date(tx.timestamp).getTime() > oneDayAgo
+        );
+        
+        const sampleTxCount = recentTxs.length;
+        const totalTxs = parseInt(statsData.totalTransactionsCount) || 0;
+        const scaleFactor = sampleTxCount > 0 ? (totalTxs / 100) : 1;
+        const transactions24h = Math.round(sampleTxCount * scaleFactor);
+        
+        const wcoMovedSample = recentTxs.reduce((sum, tx) => {
+          const value = parseFloat(tx.value);
+          return sum + (isNaN(value) ? 0 : value);
+        }, 0);
+        
+        const wcoMoved24h = wcoMovedSample * scaleFactor;
+        
+        const uniqueAddresses = new Set<string>();
+        recentTxs.forEach(tx => {
+          if (tx.from?.hash) uniqueAddresses.add(tx.from.hash.toLowerCase());
+          if (tx.to?.hash) uniqueAddresses.add(tx.to.hash.toLowerCase());
+        });
+        
+        const activeWallets = Math.round(uniqueAddresses.size * scaleFactor);
+        const avgTransactionSize = transactions24h > 0 ? wcoMoved24h / transactions24h : 0;
+
+        const totalHolders = addressData.filter(addr => {
+          const balance = parseFloat(addr.coin_balance) || 0;
+          return balance >= MIN_HOLDER_BALANCE;
+        }).length;
+
+        return {
+          totalHolders: Math.round(totalHolders * scaleFactor),
+          transactions24h,
+          wcoMoved24h,
+          activeWallets,
+          avgTransactionSize,
+        };
+      } catch (err) {
+        console.error('Error fetching network stats:', err);
+        return null;
       }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000,
+  });
 
-    } catch (err) {
-      console.error('Error fetching W Chain network stats:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch network stats');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const error = queryError ? String(queryError) : null;
 
-  const fetchNetworkStatsGraphQL = async () => {
-    // Use GraphQL for efficient single-query data fetching
-    const [networkData, activeWalletData, holderData] = await Promise.all([
-      wchainGraphQL.getNetworkStats(5000), // Much larger dataset for accuracy
-      wchainGraphQL.getActiveWallets(24),   // Get 24h active wallets
-      wchainGraphQL.getHolderCount(MIN_HOLDER_BALANCE.toString())
-    ]);
-
-    // Calculate 24h WCO moved and transaction metrics
-    const now = Date.now();
-    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
-    
-    let wcoMoved24h = 0;
-    let transactionCount24h = 0;
-    
-    activeWalletData.transactions.forEach(tx => {
-      const txTime = new Date(tx.timestamp).getTime();
-      if (txTime >= twentyFourHoursAgo) {
-        const value = parseFloat(tx.value) / 1e18; // Convert from Wei to WCO
-        wcoMoved24h += value;
-        transactionCount24h++;
-      }
-    });
-
-    // Calculate average transaction size
-    const averageTransactionSize = transactionCount24h > 0 
-      ? wcoMoved24h / transactionCount24h 
-      : 0;
-
-    // Calculate network activity rate against tracked wallets
-    const networkActivityRate = totalTrackedWallets > 0 
-      ? Math.min(100, (activeWalletData.activeWallets.length / totalTrackedWallets) * 100)
-      : 0;
-
-    const newStats = {
-      totalHolders: holderData.totalHolders,
-      transactions24h: transactionCount24h,
-      wcoMoved24h: Math.round(wcoMoved24h),
-      activeWallets: activeWalletData.activeWallets.length,
-      averageTransactionSize: Math.round(averageTransactionSize * 100) / 100,
-      networkActivityRate: Math.round(networkActivityRate * 10) / 10,
-    };
-
-    console.log('GraphQL Stats:', newStats);
-    console.log('Active wallets (GraphQL):', activeWalletData.activeWallets.length);
-
-    setData(newStats);
-  };
-
-  const fetchNetworkStatsREST = async () => {
-    // Fallback to original REST implementation
-    const statsResponse = await fetch(`${W_CHAIN_API_BASE}/stats`);
-    if (!statsResponse.ok) {
-      throw new Error(`Stats API error: ${statsResponse.status}`);
-    }
-    const networkStats: NetworkStats = await statsResponse.json();
-
-    const addressesResponse = await fetch(`${W_CHAIN_API_BASE}/addresses?limit=1000`);
-    if (!addressesResponse.ok) {
-      throw new Error(`Addresses API error: ${addressesResponse.status}`);
-    }
-    const addressesData = await addressesResponse.json();
-    const addresses: AddressData[] = addressesData.items || [];
-    
-    const transactionsResponse = await fetch(`${W_CHAIN_API_BASE}/transactions?limit=1000`);
-    if (!transactionsResponse.ok) {
-      throw new Error(`Transactions API error: ${transactionsResponse.status}`);
-    }
-    const transactionsData = await transactionsResponse.json();
-    const transactions: TransactionData[] = transactionsData.items || [];
-
-    // Calculate total holders (addresses with WCO balance > 1)
-    const totalHolders = addresses.filter(address => {
-      const balance = parseFloat(address.coin_balance) || 0;
-      return balance >= MIN_HOLDER_BALANCE;
-    }).length;
-
-    // Scale holders based on sample size
-    const totalAddresses = parseInt(networkStats.totalAddresses) || 0;
-    const sampleSize = addresses.length;
-    const scalingFactor = sampleSize > 0 ? totalAddresses / sampleSize : 1;
-    const estimatedTotalHolders = Math.round(totalHolders * scalingFactor);
-
-    // Get 24h transactions from stats
-    const transactions24h = parseInt((networkStats as any).transactions_today || '0') || 0;
-
-    // Calculate 24h WCO moved and average transaction size
-    const now = Date.now();
-    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
-    
-    let wcoMoved24h = 0;
-    let transactionCount24h = 0;
-    
-    transactions.forEach(tx => {
-      const txTime = new Date(tx.timestamp).getTime();
-      if (txTime >= twentyFourHoursAgo) {
-        const value = parseFloat(tx.value) / 1e18; // Convert from Wei to WCO
-        wcoMoved24h += value;
-        transactionCount24h++;
-      }
-    });
-
-    // Scale 24h volume based on sample vs actual transactions
-    const actualTransactions24h = transactions24h > 0 ? transactions24h : transactionCount24h;
-    const volumeScalingFactor = transactionCount24h > 0 ? actualTransactions24h / transactionCount24h : 1;
-    const estimatedWcoMoved24h = wcoMoved24h * volumeScalingFactor;
-
-    // Calculate average transaction size
-    const averageTransactionSize = actualTransactions24h > 0 
-      ? estimatedWcoMoved24h / actualTransactions24h 
-      : 0;
-
-    // Calculate active wallets using transaction-based approach
-    const activeWalletsSet = new Set<string>();
-    
-    transactions.forEach(tx => {
-      const txTime = new Date(tx.timestamp).getTime();
-      if (txTime >= twentyFourHoursAgo) {
-        activeWalletsSet.add(tx.from.hash.toLowerCase());
-        activeWalletsSet.add(tx.to.hash.toLowerCase());
-      }
-    });
-
-    const activeWallets = activeWalletsSet.size;
-
-    // Calculate network activity rate against tracked wallets
-    const networkActivityRate = totalTrackedWallets > 0 
-      ? Math.min(100, (activeWallets / totalTrackedWallets) * 100)
-      : 0;
-
-    const newStats = {
-      totalHolders: estimatedTotalHolders,
-      transactions24h: actualTransactions24h,
-      wcoMoved24h: Math.round(estimatedWcoMoved24h),
-      activeWallets: activeWallets,
-      averageTransactionSize: Math.round(averageTransactionSize * 100) / 100,
-      networkActivityRate: Math.round(networkActivityRate * 10) / 10,
-    };
-
-    console.log('REST Stats:', newStats);
-    console.log('Active wallets (REST):', activeWallets);
-
-    setData(newStats);
-  };
-
-  useEffect(() => {
-    fetchNetworkStats();
-    
-    // Refresh data every 5 minutes (less frequent to avoid overwhelming the API)
-    const interval = setInterval(fetchNetworkStats, 5 * 60 * 1000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  return { data, loading, error };
+  return { data: data || null, loading, error };
 };
