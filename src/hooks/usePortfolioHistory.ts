@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export interface PortfolioSnapshot {
   id: string;
@@ -16,47 +17,51 @@ interface UsePortfolioHistoryReturn {
   loading: boolean;
   error: string | null;
   latestSnapshot: PortfolioSnapshot | null;
-  createSnapshot: (walletAddress: string, totalValue: number, tokenHoldings: any[]) => Promise<void>;
+  createSnapshot: (walletAddress: string, totalValue: number, tokenHoldings: any[]) => void;
 }
 
+// Fetch snapshots with React Query
+const fetchPortfolioSnapshots = async (walletAddress: string): Promise<PortfolioSnapshot[]> => {
+  const { data, error } = await supabase
+    .from('portfolio_snapshots')
+    .select('*')
+    .eq('wallet_address', walletAddress)
+    .order('snapshot_date', { ascending: false })
+    .limit(90); // Last 90 days
+
+  if (error) throw error;
+
+  return (data || []).map(snapshot => ({
+    ...snapshot,
+    token_holdings: Array.isArray(snapshot.token_holdings) 
+      ? snapshot.token_holdings 
+      : snapshot.token_holdings ? [snapshot.token_holdings] : []
+  }));
+};
+
 export const usePortfolioHistory = (walletAddress: string | null): UsePortfolioHistoryReturn => {
-  const [snapshots, setSnapshots] = useState<PortfolioSnapshot[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const fetchSnapshots = async () => {
-    if (!walletAddress) return;
+  // Use React Query for fetching snapshots with 5-minute cache
+  const { data: snapshots = [], isLoading, error: queryError } = useQuery({
+    queryKey: ['portfolioSnapshots', walletAddress],
+    queryFn: () => fetchPortfolioSnapshots(walletAddress!),
+    enabled: !!walletAddress,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  });
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('portfolio_snapshots')
-        .select('*')
-        .eq('wallet_address', walletAddress)
-        .order('snapshot_date', { ascending: false })
-        .limit(90); // Last 90 days
-
-      if (fetchError) throw fetchError;
-
-      const formattedData = (data || []).map(snapshot => ({
-        ...snapshot,
-        token_holdings: Array.isArray(snapshot.token_holdings) 
-          ? snapshot.token_holdings 
-          : snapshot.token_holdings ? [snapshot.token_holdings] : []
-      }));
-      setSnapshots(formattedData);
-    } catch (err) {
-      console.error('Error fetching portfolio history:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch portfolio history');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const createSnapshot = async (walletAddress: string, totalValue: number, tokenHoldings: any[]) => {
-    try {
+  // Mutation for creating/updating snapshots
+  const snapshotMutation = useMutation({
+    mutationFn: async ({ 
+      walletAddress, 
+      totalValue, 
+      tokenHoldings 
+    }: { 
+      walletAddress: string; 
+      totalValue: number; 
+      tokenHoldings: any[] 
+    }) => {
       const today = new Date().toISOString().split('T')[0];
 
       // Check if snapshot already exists for today
@@ -92,25 +97,26 @@ export const usePortfolioHistory = (walletAddress: string | null): UsePortfolioH
 
         if (insertError) throw insertError;
       }
+    },
+    onSuccess: () => {
+      // Invalidate and refetch snapshots
+      queryClient.invalidateQueries({ queryKey: ['portfolioSnapshots', walletAddress] });
+    },
+  });
 
-      // Refresh snapshots
-      fetchSnapshots();
-    } catch (err) {
-      console.error('Error creating portfolio snapshot:', err);
-      setError(err instanceof Error ? err.message : 'Failed to create portfolio snapshot');
-    }
-  };
-
-  useEffect(() => {
-    fetchSnapshots();
-  }, [walletAddress]);
+  const createSnapshot = useCallback(
+    (walletAddress: string, totalValue: number, tokenHoldings: any[]) => {
+      snapshotMutation.mutate({ walletAddress, totalValue, tokenHoldings });
+    },
+    [snapshotMutation]
+  );
 
   const latestSnapshot = snapshots.length > 0 ? snapshots[0] : null;
 
   return {
     snapshots,
-    loading,
-    error,
+    loading: isLoading,
+    error: queryError ? (queryError as Error).message : null,
     latestSnapshot,
     createSnapshot
   };

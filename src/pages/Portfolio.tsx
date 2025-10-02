@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { useWChainTokens } from '@/hooks/useWChainTokens';
 import { useTokenBalances } from '@/hooks/useTokenBalances';
@@ -52,13 +53,9 @@ const Portfolio = () => {
   const { createSnapshot } = usePortfolioHistory(walletInfo?.address || null);
   const { metrics, chartData } = usePortfolioPnL(allBalances, walletInfo?.address || null);
 
-  const handleRefreshPortfolio = () => {
-    refreshTokens();
-    refetchBalances();
-    scanWallet();
-    
-    // Create portfolio snapshot after refresh
-    if (walletInfo?.address && allBalances.length > 0) {
+  // Auto-create snapshot when wallet connects and balances are loaded
+  useEffect(() => {
+    if (walletInfo?.address && allBalances.length > 0 && !scannerLoading) {
       const totalValue = allBalances.reduce((sum, balance) => {
         const priceValue = parseFloat(balance.token.exchange_rate || '0');
         if (priceValue > 0) {
@@ -67,8 +64,18 @@ const Portfolio = () => {
         return sum + (balance.usdValue || 0);
       }, 0);
       
-      createSnapshot(walletInfo.address, totalValue, allBalances);
+      // Only create snapshot if total value is > 0
+      if (totalValue > 0) {
+        console.log('Auto-creating portfolio snapshot:', { totalValue, tokens: allBalances.length });
+        createSnapshot(walletInfo.address, totalValue, allBalances);
+      }
     }
+  }, [walletInfo?.address, allBalances, scannerLoading, createSnapshot]);
+
+  const handleRefreshPortfolio = () => {
+    refreshTokens();
+    refetchBalances();
+    scanWallet();
   };
 
   return (
