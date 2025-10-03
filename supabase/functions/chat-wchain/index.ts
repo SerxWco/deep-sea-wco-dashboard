@@ -270,6 +270,43 @@ const tools = [
         required: ["symbol"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getTokenTransfers",
+      description: "Get ERC-20/ERC-721/ERC-1155 token transfers for an address",
+      parameters: {
+        type: "object",
+        properties: {
+          address: { type: "string", description: "Wallet address" },
+          tokenType: { 
+            type: "string", 
+            enum: ["ERC-20", "ERC-721", "ERC-1155"],
+            description: "Token standard type (default: ERC-20)"
+          },
+          startBlock: { type: "number", description: "Starting block number" },
+          endBlock: { type: "number", description: "Ending block number" },
+          page: { type: "number", description: "Page number (default: 1)" },
+          offset: { type: "number", description: "Number of results per page (default: 100)" }
+        },
+        required: ["address"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getContractInfo",
+      description: "Get verified contract source code, ABI, and compiler information",
+      parameters: {
+        type: "object",
+        properties: {
+          address: { type: "string", description: "Contract address" }
+        },
+        required: ["address"]
+      }
+    }
   }
 ];
 
@@ -685,6 +722,101 @@ async function executeGetTokenPrice(args: any) {
   }
 }
 
+// Execute get token transfers
+async function executeGetTokenTransfers(args: any) {
+  try {
+    let action = 'tokentx'; // ERC-20 by default
+    if (args.tokenType === 'ERC-721') action = 'tokennfttx';
+    if (args.tokenType === 'ERC-1155') action = 'token1155tx';
+    
+    let url = `https://scan.w-chain.com/api?module=account&action=${action}&address=${args.address}`;
+    if (args.startBlock) url += `&startblock=${args.startBlock}`;
+    if (args.endBlock) url += `&endblock=${args.endBlock}`;
+    url += `&page=${args.page || 1}&offset=${args.offset || 100}&sort=desc`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.status === "1" && data.result) {
+      const transfers = data.result.map((tx: any) => ({
+        hash: tx.hash,
+        from: tx.from,
+        to: tx.to,
+        value: tx.value ? (parseInt(tx.value) / Math.pow(10, parseInt(tx.tokenDecimal || '18'))).toFixed(4) : 'N/A',
+        tokenName: tx.tokenName,
+        tokenSymbol: tx.tokenSymbol,
+        blockNumber: tx.blockNumber,
+        timestamp: new Date(parseInt(tx.timeStamp) * 1000).toISOString(),
+        tokenId: tx.tokenID || null
+      }));
+      
+      return {
+        transfers,
+        count: transfers.length,
+        tokenType: args.tokenType || 'ERC-20',
+        address: args.address
+      };
+    }
+    
+    return { 
+      transfers: [], 
+      count: 0,
+      message: "No token transfers found or address has no token activity"
+    };
+  } catch (error) {
+    console.error('Token transfers error:', error);
+    return { error: `Failed to get token transfers: ${error.message}` };
+  }
+}
+
+// Execute get contract info
+async function executeGetContractInfo(args: any) {
+  try {
+    const response = await fetch(
+      `https://scan.w-chain.com/api?module=contract&action=getsourcecode&address=${args.address}`
+    );
+    const data = await response.json();
+    
+    if (data.status === "1" && data.result && data.result[0]) {
+      const contract = data.result[0];
+      
+      if (contract.SourceCode === '') {
+        return { 
+          verified: false,
+          address: args.address,
+          message: "Contract is not verified on BlockScout"
+        };
+      }
+      
+      return {
+        verified: true,
+        address: args.address,
+        contractName: contract.ContractName,
+        compiler: contract.CompilerVersion,
+        optimization: contract.OptimizationUsed === "1",
+        runs: contract.Runs,
+        constructorArguments: contract.ConstructorArguments,
+        evmVersion: contract.EVMVersion,
+        library: contract.Library,
+        licenseType: contract.LicenseType,
+        proxy: contract.Proxy === "1",
+        implementation: contract.Implementation,
+        swarmSource: contract.SwarmSource,
+        hasSourceCode: true,
+        hasABI: contract.ABI !== "Contract source code not verified"
+      };
+    }
+    
+    return { 
+      error: "Contract not found or API error",
+      address: args.address
+    };
+  } catch (error) {
+    console.error('Contract info error:', error);
+    return { error: `Failed to get contract info: ${error.message}` };
+  }
+}
+
 // Tool router
 async function executeTool(toolName: string, args: any) {
   console.log(`Executing: ${toolName}`, args);
@@ -706,7 +838,9 @@ async function executeTool(toolName: string, args: any) {
     getTransactionCharts: executeGetTransactionCharts,
     getDailyMetrics: executeGetDailyMetrics,
     getSupplyInfo: executeGetSupplyInfo,
-    getTokenPrice: executeGetTokenPrice
+    getTokenPrice: executeGetTokenPrice,
+    getTokenTransfers: executeGetTokenTransfers,
+    getContractInfo: executeGetContractInfo
   };
 
   return executors[toolName] ? await executors[toolName](args) : { error: `Unknown tool: ${toolName}` };
@@ -725,7 +859,33 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    const systemPrompt = `You are a comprehensive W-Chain blockchain explorer assistant with access to the complete W-Chain API. You can answer questions about:
+    const systemPrompt = `You are a comprehensive W-Chain blockchain explorer assistant with access to the complete W-Chain API and BlockScout integration.
+
+**W-Chain BlockScout API & RPC Endpoints:**
+- BlockScout Explorer: https://scan.w-chain.com
+- BlockScout API Base: https://scan.w-chain.com/api
+- BlockScout REST API v2: https://scan.w-chain.com/api/v2
+- Primary RPC Endpoint: https://rpc.w-chain.com
+- Chain ID: 171717
+- Fully EVM-compatible and Etherscan-compatible API
+- Supports GET and POST requests
+
+**Available BlockScout API Modules:**
+1. Account (?module=account) - Wallet balances, transactions, token transfers
+   - ERC-20 token transfers (tokentx)
+   - ERC-721 NFT transfers (tokennfttx)
+   - ERC-1155 transfers (token1155tx)
+2. Contract (?module=contract) - Contract source code, ABI, verification status
+3. Transaction (?module=transaction) - Transaction details and status
+4. Block (?module=block) - Block data and rewards
+5. Stats (?module=stats) - Network statistics
+6. Token (?module=token) - Token information and holder lists
+7. Logs (?module=logs) - Contract event logs and filtering
+
+**JSON RPC Capabilities:**
+- Fully EVM-compatible
+- Supports all standard Ethereum JSON-RPC methods
+- Compatible with ethers.js, web3.js, viem, and other Web3 libraries
 
 **The W-Chain Ecosystem:**
 - Native WCO Token: holders, balances, transfers, distribution, categories (Kraken 🦑, Whale 🐋, Shark 🦈, Dolphin 🐬, Fish 🐟, Shrimp 🦐)
