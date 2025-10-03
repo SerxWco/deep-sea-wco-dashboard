@@ -40,12 +40,15 @@ async function fetchAPI(endpoint: string, cacheTTL = 0) {
 
 // Categorize wallet by balance
 function categorizeWallet(balance: number): string {
-  if (balance >= 10000000) return "Kraken 🦑";
-  if (balance >= 1000000) return "Whale 🐋";
-  if (balance >= 100000) return "Shark 🦈";
-  if (balance >= 10000) return "Dolphin 🐬";
-  if (balance >= 1000) return "Fish 🐟";
-  return "Shrimp 🦐";
+  if (balance >= 5000000) return "Kraken 🦑";
+  if (balance >= 1000001) return "Whale 🐋";
+  if (balance >= 500001) return "Shark 🦈";
+  if (balance >= 100001) return "Dolphin 🐬";
+  if (balance >= 50001) return "Fish 🐟";
+  if (balance >= 10001) return "Octopus 🐙";
+  if (balance >= 1001) return "Crab 🦀";
+  if (balance >= 1) return "Shrimp 🦐";
+  return "Plankton 🦠";
 }
 
 // Tool definitions
@@ -120,12 +123,13 @@ const tools = [
     type: "function",
     function: {
       name: "getRecentTransactions",
-      description: "Get recent transactions with optional filters",
+      description: "Get recent transactions with optional time and value filters",
       parameters: {
         type: "object",
         properties: {
           limit: { type: "number", default: 20 },
-          minValue: { type: "number", description: "Minimum transaction value in WCO" }
+          minValue: { type: "number", description: "Minimum transaction value in WCO" },
+          hours: { type: "number", description: "Filter transactions from the last X hours" }
         }
       }
     }
@@ -156,7 +160,7 @@ const tools = [
         type: "object",
         properties: {
           limit: { type: "number", default: 50 },
-          category: { type: "string", enum: ["Kraken", "Whale", "Shark", "Dolphin", "Fish", "Shrimp"], description: "Filter by category" }
+          category: { type: "string", enum: ["Kraken", "Whale", "Shark", "Dolphin", "Fish", "Octopus", "Crab", "Shrimp", "Plankton"], description: "Filter by category" }
         }
       }
     }
@@ -397,11 +401,24 @@ async function executeGetRecentTransactions(args: any) {
       status: tx.status
     }));
 
+    // Filter by time if hours parameter is provided
+    if (args.hours) {
+      const cutoffTime = new Date(Date.now() - args.hours * 60 * 60 * 1000);
+      txs = txs.filter((tx: any) => {
+        const txTime = new Date(tx.timestamp);
+        return txTime >= cutoffTime;
+      });
+    }
+
+    // Filter by minimum value
     if (args.minValue) {
       txs = txs.filter((tx: any) => tx.value >= args.minValue);
     }
 
-    return { transactions: txs.slice(0, args.limit || 20) };
+    return { 
+      transactions: txs.slice(0, args.limit || 20),
+      filtered: args.hours ? `Last ${args.hours} hours` : 'All recent'
+    };
   } catch (error) {
     return { error: `Failed to fetch transactions: ${error.message}` };
   }
