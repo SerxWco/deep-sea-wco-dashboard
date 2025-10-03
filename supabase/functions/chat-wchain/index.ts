@@ -731,6 +731,19 @@ Key Addresses:
 - WCO Token Contract: 0xba9Be06936C806AEfAd981Ae96fa4D599B78aD24
 - Treasury Wallet: 0x67F2696c125D8D1307a5aE17348A440718229D03
 
+**Web3 Wallet Setup:**
+W Chain is fully EVM-compatible and works with all popular Web3 wallets (Rabby, MetaMask, Rainbow, Phantom, etc.)
+
+Mainnet Network Configuration:
+- Network Name: W Chain
+- RPC URL: https://rpc.w-chain.com
+- Chain ID: 171717
+- Currency Symbol: WCO
+- Decimals: 18
+- Block Explorer: https://scan.w-chain.com
+
+To connect: Add as "Custom Network" in your wallet app using the above configuration.
+
 Supply Calculation:
 - Formula: Circulating Supply = Initial Supply - Locked Supply - Burned Supply
 - Real-time supply data available via getSupplyInfo tool (cached 2 minutes)
