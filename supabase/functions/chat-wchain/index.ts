@@ -260,12 +260,31 @@ async function executeSearchBlockchain(args: any) {
 async function executeGetNetworkStats() {
   try {
     const data = await fetchAPI('/stats', 300000); // 5 min cache
+    
+    // Fetch WCO holder count from Supabase cache
+    let totalHolders = null;
+    try {
+      const { data: metadata } = await supabase
+        .from('wallet_cache_metadata')
+        .select('total_holders')
+        .order('last_refresh', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (metadata?.total_holders) {
+        totalHolders = metadata.total_holders;
+      }
+    } catch (err) {
+      console.log('Could not fetch holder count from cache:', err);
+    }
+    
     return {
       totalAddresses: data.total_addresses,
       totalTransactions: data.total_transactions,
       totalBlocks: data.total_blocks,
       averageBlockTime: data.average_block_time,
       gasUsed24h: data.gas_used_today,
+      totalHolders: totalHolders,
       timestamp: new Date().toISOString()
     };
   } catch (error) {

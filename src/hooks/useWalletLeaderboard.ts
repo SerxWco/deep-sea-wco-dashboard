@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { wchainGraphQL } from '@/services/wchainGraphQL';
 
 export interface WalletData {
@@ -115,9 +116,6 @@ const categorizeWallet = (balance: number, address: string): { category: string;
 
 // Fetch function for React Query
 const fetchAllWallets = async (): Promise<WalletData[]> => {
-  let allWallets: WalletData[] = [];
-  const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
-
   // Function to fetch a specific wallet by address
   const fetchSpecificWallet = async (address: string): Promise<WalletData | null> => {
     try {
@@ -148,7 +146,34 @@ const fetchAllWallets = async (): Promise<WalletData[]> => {
     }
   };
 
-  // 1) Fast path: GraphQL (fetch top addresses in one request)
+  // 1) Try Supabase cache first (fastest)
+  console.log('Attempting to fetch from Supabase cache...');
+  try {
+    const { data: cachedWallets, error: cacheError } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('*')
+      .order('balance', { ascending: false });
+
+    if (!cacheError && cachedWallets && cachedWallets.length > 0) {
+      console.log(`✅ Loaded ${cachedWallets.length} wallets from Supabase cache`);
+      
+      return cachedWallets.map(wallet => ({
+        address: wallet.address,
+        balance: Number(wallet.balance),
+        category: wallet.category,
+        emoji: wallet.emoji,
+        txCount: wallet.transaction_count,
+        label: wallet.label || undefined,
+      }));
+    }
+    
+    console.log('Cache empty or error, falling back to API...');
+  } catch (cacheErr) {
+    console.warn('Supabase cache fetch failed:', cacheErr);
+  }
+
+  // 2) Fast path: GraphQL (fetch top addresses in one request)
+  let allWallets: WalletData[] = [];
   try {
     const graphOK = await wchainGraphQL.testConnection();
     if (graphOK) {
@@ -196,7 +221,8 @@ const fetchAllWallets = async (): Promise<WalletData[]> => {
     console.warn('GraphQL fast-path failed, falling back to REST:', e);
   }
 
-  // 2) Fallback: REST paginated crawl
+  // 3) Fallback: REST paginated crawl
+  const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
   let url = `${baseUrl}?items_count=100`;
   let keepFetching = true;
   let pageCount = 0;

@@ -128,6 +128,75 @@ export type Database = {
         }
         Relationships: []
       }
+      wallet_cache_metadata: {
+        Row: {
+          created_at: string
+          id: string
+          last_refresh: string
+          refresh_status: string
+          total_holders: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_refresh?: string
+          refresh_status?: string
+          total_holders?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_refresh?: string
+          refresh_status?: string
+          total_holders?: number
+        }
+        Relationships: []
+      }
+      wallet_leaderboard_cache: {
+        Row: {
+          address: string
+          balance: number
+          category: string
+          created_at: string
+          emoji: string
+          id: string
+          is_exchange: boolean
+          is_flagship: boolean
+          is_wrapped: boolean
+          label: string | null
+          transaction_count: number
+          updated_at: string
+        }
+        Insert: {
+          address: string
+          balance: number
+          category: string
+          created_at?: string
+          emoji: string
+          id?: string
+          is_exchange?: boolean
+          is_flagship?: boolean
+          is_wrapped?: boolean
+          label?: string | null
+          transaction_count?: number
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          balance?: number
+          category?: string
+          created_at?: string
+          emoji?: string
+          id?: string
+          is_exchange?: boolean
+          is_flagship?: boolean
+          is_wrapped?: boolean
+          label?: string | null
+          transaction_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
