@@ -8,6 +8,7 @@ import { useWCOSupplyInfo } from "@/hooks/useWCOSupplyInfo";
 import { useWChainPriceAPI } from "@/hooks/useWChainPriceAPI";
 import { formatCurrency, formatPercentage, formatNumber } from "@/utils/formatters";
 import { formatExactNumber } from "@/utils/exactFormatters";
+import { WChainChatbot } from "@/components/WChainChatbot";
 import { 
   DollarSign, 
   TrendingUp, 
@@ -131,6 +132,11 @@ export default function Dashboard() {
             value={networkStats ? `${networkStats.averageTransactionSize} WCO` : networkLoading ? "..." : "N/A"}
             icon={<BarChart3 className="h-5 w-5" />}
           />
+        </div>
+
+        {/* AI Chatbot */}
+        <div className="mt-8">
+          <WChainChatbot />
         </div>
       </div>
     </div>
