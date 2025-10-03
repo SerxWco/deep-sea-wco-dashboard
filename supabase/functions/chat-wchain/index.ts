@@ -307,6 +307,85 @@ const tools = [
         required: ["address"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getContractLogs",
+      description: "Query contract event logs with optional filters for block range and event topics",
+      parameters: {
+        type: "object",
+        properties: {
+          address: { type: "string", description: "Contract address" },
+          fromBlock: { type: "number", description: "Starting block number (optional)" },
+          toBlock: { type: "number", description: "Ending block number (optional, defaults to 'latest')" },
+          topic0: { type: "string", description: "Event signature hash (optional)" },
+          page: { type: "number", description: "Page number (default: 1)" },
+          offset: { type: "number", description: "Number of logs per page (default: 100, max: 1000)" }
+        },
+        required: ["address"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getMultipleBalances",
+      description: "Get WCO balances for multiple wallet addresses in a single call (max 20 addresses)",
+      parameters: {
+        type: "object",
+        properties: {
+          addresses: { 
+            type: "array", 
+            items: { type: "string" },
+            description: "Array of wallet addresses (maximum 20)" 
+          }
+        },
+        required: ["addresses"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getBlockReward",
+      description: "Get block mining reward and uncle inclusion information",
+      parameters: {
+        type: "object",
+        properties: {
+          blockNumber: { type: "number", description: "Block number to query" }
+        },
+        required: ["blockNumber"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getTransactionStatus",
+      description: "Get detailed transaction execution status and receipt information",
+      parameters: {
+        type: "object",
+        properties: {
+          txHash: { type: "string", description: "Transaction hash" }
+        },
+        required: ["txHash"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getBlockCountdown",
+      description: "Estimate time remaining until a specific block number is mined",
+      parameters: {
+        type: "object",
+        properties: {
+          blockNumber: { type: "number", description: "Target block number" }
+        },
+        required: ["blockNumber"]
+      }
+    }
   }
 ];
 
@@ -817,6 +896,194 @@ async function executeGetContractInfo(args: any) {
   }
 }
 
+// Execute get contract logs
+async function executeGetContractLogs(args: any) {
+  try {
+    let url = `https://scan.w-chain.com/api?module=logs&action=getLogs&address=${args.address}`;
+    
+    if (args.fromBlock) url += `&fromBlock=${args.fromBlock}`;
+    if (args.toBlock) url += `&toBlock=${args.toBlock}`;
+    else url += `&toBlock=latest`;
+    
+    if (args.topic0) url += `&topic0=${args.topic0}`;
+    
+    url += `&page=${args.page || 1}&offset=${args.offset || 100}`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.status === "1" && data.result) {
+      const logs = data.result.map((log: any) => ({
+        address: log.address,
+        topics: log.topics,
+        data: log.data,
+        blockNumber: log.blockNumber,
+        transactionHash: log.transactionHash,
+        transactionIndex: log.transactionIndex,
+        blockHash: log.blockHash,
+        logIndex: log.logIndex,
+        timestamp: log.timeStamp ? new Date(parseInt(log.timeStamp) * 1000).toISOString() : null
+      }));
+      
+      return {
+        logs,
+        count: logs.length,
+        contractAddress: args.address,
+        blockRange: {
+          from: args.fromBlock || 'earliest',
+          to: args.toBlock || 'latest'
+        }
+      };
+    }
+    
+    return { 
+      logs: [], 
+      count: 0,
+      message: "No logs found for this contract with the specified filters"
+    };
+  } catch (error) {
+    console.error('Contract logs error:', error);
+    return { error: `Failed to get contract logs: ${error.message}` };
+  }
+}
+
+// Execute get multiple balances
+async function executeGetMultipleBalances(args: any) {
+  try {
+    if (!args.addresses || args.addresses.length === 0) {
+      return { error: "No addresses provided" };
+    }
+    
+    if (args.addresses.length > 20) {
+      return { error: "Maximum 20 addresses allowed per request" };
+    }
+    
+    const addresses = args.addresses.slice(0, 20).join(',');
+    const response = await fetch(
+      `https://scan.w-chain.com/api?module=account&action=balancemulti&address=${addresses}`
+    );
+    const data = await response.json();
+    
+    if (data.status === "1" && data.result) {
+      const balances = data.result.map((item: any) => {
+        const balanceWei = item.balance;
+        const balance = parseFloat(balanceWei) / 1e18;
+        
+        return {
+          address: item.account,
+          balance: balance.toFixed(4),
+          balanceWei: balanceWei,
+          category: categorizeWallet(balance),
+          balanceFormatted: `${balance.toLocaleString()} WCO`
+        };
+      });
+      
+      return {
+        balances,
+        count: balances.length,
+        totalBalance: balances.reduce((sum: number, b: any) => sum + parseFloat(b.balance), 0).toFixed(4),
+        summary: {
+          highest: balances.reduce((max: any, b: any) => parseFloat(b.balance) > parseFloat(max.balance) ? b : max, balances[0]),
+          lowest: balances.reduce((min: any, b: any) => parseFloat(b.balance) < parseFloat(min.balance) ? b : min, balances[0])
+        }
+      };
+    }
+    
+    return { error: "Failed to fetch balances or invalid addresses" };
+  } catch (error) {
+    console.error('Multiple balances error:', error);
+    return { error: `Failed to get multiple balances: ${error.message}` };
+  }
+}
+
+// Execute get block reward
+async function executeGetBlockReward(args: any) {
+  try {
+    const response = await fetch(
+      `https://scan.w-chain.com/api?module=block&action=getblockreward&blockno=${args.blockNumber}`
+    );
+    const data = await response.json();
+    
+    if (data.status === "1" && data.result) {
+      const result = data.result;
+      const blockReward = parseFloat(result.blockReward) / 1e18;
+      
+      return {
+        blockNumber: args.blockNumber,
+        blockMiner: result.blockMiner,
+        blockReward: blockReward.toFixed(6),
+        blockRewardWei: result.blockReward,
+        uncles: result.uncles || [],
+        uncleInclusionReward: result.uncleInclusionReward ? (parseFloat(result.uncleInclusionReward) / 1e18).toFixed(6) : "0",
+        timestamp: result.timeStamp ? new Date(parseInt(result.timeStamp) * 1000).toISOString() : null
+      };
+    }
+    
+    return { error: "Block reward information not available" };
+  } catch (error) {
+    console.error('Block reward error:', error);
+    return { error: `Failed to get block reward: ${error.message}` };
+  }
+}
+
+// Execute get transaction status
+async function executeGetTransactionStatus(args: any) {
+  try {
+    const response = await fetch(
+      `https://scan.w-chain.com/api?module=transaction&action=gettxreceiptstatus&txhash=${args.txHash}`
+    );
+    const data = await response.json();
+    
+    if (data.status === "1" && data.result) {
+      const statusResponse = await fetch(
+        `https://scan.w-chain.com/api?module=transaction&action=getstatus&txhash=${args.txHash}`
+      );
+      const statusData = await statusResponse.json();
+      
+      return {
+        txHash: args.txHash,
+        status: data.result.status === "1" ? "Success" : "Failed",
+        executionStatus: statusData.status === "1" && statusData.result ? statusData.result.isError === "0" ? "Success" : "Error" : "Unknown",
+        errorDescription: statusData.result?.errDescription || null,
+        receiptStatus: data.result.status
+      };
+    }
+    
+    return { error: "Transaction status not available or transaction not found" };
+  } catch (error) {
+    console.error('Transaction status error:', error);
+    return { error: `Failed to get transaction status: ${error.message}` };
+  }
+}
+
+// Execute get block countdown
+async function executeGetBlockCountdown(args: any) {
+  try {
+    const response = await fetch(
+      `https://scan.w-chain.com/api?module=block&action=getblockcountdown&blockno=${args.blockNumber}`
+    );
+    const data = await response.json();
+    
+    if (data.status === "1" && data.result) {
+      const result = data.result;
+      
+      return {
+        currentBlock: result.CurrentBlock,
+        targetBlock: args.blockNumber,
+        remainingBlocks: result.RemainingBlock,
+        estimatedTimeSeconds: result.EstimateTimeInSec,
+        estimatedTime: `${Math.floor(result.EstimateTimeInSec / 3600)}h ${Math.floor((result.EstimateTimeInSec % 3600) / 60)}m ${result.EstimateTimeInSec % 60}s`,
+        message: result.RemainingBlock < 0 ? "Block has already been mined" : `Approximately ${result.RemainingBlock} blocks remaining`
+      };
+    }
+    
+    return { error: "Block countdown information not available" };
+  } catch (error) {
+    console.error('Block countdown error:', error);
+    return { error: `Failed to get block countdown: ${error.message}` };
+  }
+}
+
 // Tool router
 async function executeTool(toolName: string, args: any) {
   console.log(`Executing: ${toolName}`, args);
@@ -840,7 +1107,12 @@ async function executeTool(toolName: string, args: any) {
     getSupplyInfo: executeGetSupplyInfo,
     getTokenPrice: executeGetTokenPrice,
     getTokenTransfers: executeGetTokenTransfers,
-    getContractInfo: executeGetContractInfo
+    getContractInfo: executeGetContractInfo,
+    getContractLogs: executeGetContractLogs,
+    getMultipleBalances: executeGetMultipleBalances,
+    getBlockReward: executeGetBlockReward,
+    getTransactionStatus: executeGetTransactionStatus,
+    getBlockCountdown: executeGetBlockCountdown
   };
 
   return executors[toolName] ? await executors[toolName](args) : { error: `Unknown tool: ${toolName}` };
@@ -887,12 +1159,23 @@ serve(async (req) => {
 - Supports all standard Ethereum JSON-RPC methods
 - Compatible with ethers.js, web3.js, viem, and other Web3 libraries
 
+**Enhanced Capabilities:**
+You can now answer advanced queries including:
+- Token transfers (ERC-20, ERC-721, ERC-1155) for any address
+- Contract verification status, source code, and ABI information
+- Contract event logs with filtering by block range and topics
+- Batch balance queries for multiple addresses (up to 20 at once)
+- Block mining rewards and uncle inclusion data
+- Transaction execution status and receipt details
+- Block countdown estimates and timing predictions
+
 **The W-Chain Ecosystem:**
-- Native WCO Token: holders, balances, transfers, distribution, categories (Kraken 🦑, Whale 🐋, Shark 🦈, Dolphin 🐬, Fish 🐟, Shrimp 🦐)
+- Native WCO Token: holders, balances, transfers, distribution, categories (Kraken 🦑, Whale 🐋, Shark 🦈, Dolphin 🐬, Fish 🐟, Octopus 🐙, Crab 🦀, Shrimp 🦐, Plankton 🦠)
 - All Tokens: ERC-20 tokens, ERC-721 NFTs, ERC-1155 tokens on W-Chain
-- Transactions: detailed transaction info, token transfers, internal transactions, logs, summaries
-- Blocks: block data, block transactions, validators, gas usage
-- Wallets/Addresses: balances, transaction history, token holdings, NFT collections, activity
+- Transactions: detailed transaction info, token transfers, internal transactions, logs, execution status, receipts
+- Blocks: block data, block transactions, validators, gas usage, rewards, countdown estimates
+- Wallets/Addresses: balances, transaction history, token holdings, NFT collections, activity, batch queries
+- Smart Contracts: verification status, source code, ABI, event logs, contract interactions
 - Smart Contracts: verified contracts, contract interactions
 - Network Statistics: real-time stats, charts, trends, historical data
 - Search: find any transaction, block, address, or token
