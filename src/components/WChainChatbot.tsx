@@ -9,9 +9,11 @@ import { toast } from 'sonner';
 
 const quickQuestions = [
   "How many WCO holders are there?",
-  "Show me the top Krakens",
-  "What's the total WCO volume today?",
-  "How many active wallets this week?",
+  "Show me the top 10 Krakens",
+  "What tokens exist on W-Chain?",
+  "Recent large transactions",
+  "Show holder distribution",
+  "What is the current network status?",
 ];
 
 export const WChainChatbot = () => {
@@ -72,7 +74,7 @@ export const WChainChatbot = () => {
               <div>
                 <h3 className="font-semibold text-lg mb-2">Ask me anything about W-Chain</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  I can help you with holders, transactions, wallets, and network stats
+                  I can help with WCO holders, transactions, blocks, tokens, NFTs, smart contracts, and network analytics
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
