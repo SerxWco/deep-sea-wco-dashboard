@@ -244,6 +244,14 @@ const tools = [
         }
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getSupplyInfo",
+      description: "Get detailed WCO token supply information including circulating supply, locked supply (validators, vesting contracts), burned tokens, and tokenomics breakdown",
+      parameters: { type: "object", properties: {} }
+    }
   }
 ];
 
@@ -590,6 +598,37 @@ async function executeGetDailyMetrics(args: any) {
   }
 }
 
+async function executeGetSupplyInfo() {
+  try {
+    const response = await fetch('https://oracle.w-chain.com/api/wco/supply-info');
+    if (!response.ok) throw new Error(`Supply API error: ${response.status}`);
+    const data = await response.json();
+    
+    return {
+      timestamp: data.timestamp,
+      cache_ttl: data.cache.ttl_seconds,
+      summary: {
+        initialSupply: data.summary.initial_supply_wco,
+        circulatingSupply: data.summary.circulating_supply_wco,
+        lockedSupply: data.summary.locked_supply_wco,
+        burnedSupply: data.summary.burned_supply_wco
+      },
+      lockedBreakdown: data.raw.locked_supply_breakdown.map((item: any) => ({
+        label: item.label,
+        address: item.address,
+        balanceWCO: item.balance_wco
+      })),
+      burnedDetails: {
+        address: data.raw.burned_supply_breakdown.address,
+        balanceWCO: data.raw.burned_supply_breakdown.balance_wco
+      },
+      methodology: data.methodology.formula
+    };
+  } catch (error) {
+    return { error: `Failed to fetch supply info: ${error.message}` };
+  }
+}
+
 // Tool router
 async function executeTool(toolName: string, args: any) {
   console.log(`Executing: ${toolName}`, args);
@@ -609,7 +648,8 @@ async function executeTool(toolName: string, args: any) {
     getTokenHolders: executeGetTokenHolders,
     getSmartContracts: executeGetSmartContracts,
     getTransactionCharts: executeGetTransactionCharts,
-    getDailyMetrics: executeGetDailyMetrics
+    getDailyMetrics: executeGetDailyMetrics,
+    getSupplyInfo: executeGetSupplyInfo
   };
 
   return executors[toolName] ? await executors[toolName](args) : { error: `Unknown tool: ${toolName}` };
@@ -640,6 +680,65 @@ serve(async (req) => {
 - Network Statistics: real-time stats, charts, trends, historical data
 - Search: find any transaction, block, address, or token
 
+**WCO Tokenomics (Total Supply: 10,000,000,000 WCO):**
+
+Token Allocation & Vesting:
+1. Validation on Nodes: 100,000,000 WCO (Always Locked)
+   Address: 0xfAc510D5dB8cadfF323D4b979D898dc38F3FB6dF
+
+2. Liquidity Provision: 500,000,000 WCO
+   Address: 0x511A6355407Bb78f26172DB35100A87B9bE20Fc3
+
+3. Marketing & Community: 500,000,000 WCO
+   Vesting: 120 cycles × 15 days (4,166,666.67 WCO/cycle)
+   Address: 0x2ca9472ADd8a02c74D50FC3Ea444548502E35BDb
+
+4. Premium Account Features: 500,000,000 WCO
+   Release: As and When Applicable (6,944,444.44 WCO/cycle)
+   Address: 0xa306799eE31c7f89D3ff82D3397972933d57d679
+
+5. W Chain Ecosystem: 400,000,000 WCO
+   Vesting: 72 cycles × 15 days (5,555,555.56 WCO/cycle)
+   Address: 0x94DbFF05e1C129869772E1Fb291901083CdAdef1
+
+6. Developer Incentives: 500,000,000 WCO
+   Release: As and When Applicable
+   Address: 0x58213DD561d12a0Ea7b538B1b26DE34dACe1D0F0
+
+7. Exchange Listings: 500,000,000 WCO
+   Release: As and When Applicable
+   Address: 0x13768af351B4627dcE8De6A67e59e4b27B4Cbf5D
+
+8. Incentives: 1,000,000,000 WCO
+   Vesting: 120 cycles × 15 days (8,333,333.33 WCO/cycle)
+   Address: 0xa237FeAFa2BAc4096867aF6229a2370B7A661A5F
+
+9. Institutional Sales: 1,000,000,000 WCO
+   Release: As and When Applicable
+   Address: 0xFC06231E2e448B778680202BEA8427884c011341
+
+10. Enterprises & Partnerships: 1,000,000,000 WCO
+    Vesting: 120 cycles × 15 days (8,333,333.33 WCO/cycle)
+    Address: 0x80eaBD19b84b4f5f042103e957964297589C657D
+
+11. Development Fund: 1,000,000,000 WCO
+    Vesting: 120 cycles × 15 days (8,333,333.33 WCO/cycle)
+    Address: 0x57Ab15Ca8Bd528D509DbC81d11E9BecA44f3445f
+
+12. WTK Conversion: 3,000,000,000 WCO (In Circulation)
+
+Key Addresses:
+- WCO Token Contract: 0xba9Be06936C806AEfAd981Ae96fa4D599B78aD24
+- Treasury Wallet: 0x67F2696c125D8D1307a5aE17348A440718229D03
+
+Supply Calculation:
+- Formula: Circulating Supply = Initial Supply - Locked Supply - Burned Supply
+- Real-time supply data available via getSupplyInfo tool (cached 2 minutes)
+- All locked addresses and vesting schedules are verifiable on-chain
+- Vesting cycles occur every 15 days
+- "As and When Applicable" releases are event-triggered (listings, feature launches, partnerships)
+- Validation nodes' 100M WCO remains permanently locked for network security
+
 **Response Formatting Guidelines:**
 - Use clear headings, bullet points, and tables
 - Format large numbers with commas (e.g., 1,234,567)
@@ -653,7 +752,8 @@ serve(async (req) => {
 - When users ask about "tokens", clarify if they mean WCO, specific ERC-20 tokens, or NFTs
 - All balances are in WCO unless otherwise specified
 - Always provide current/real-time data when available
-- Wallet holder data (distribution, top holders) is cached and refreshed hourly for performance - for real-time single address info, use address lookup tools`;
+- Wallet holder data (distribution, top holders) is cached and refreshed hourly for performance - for real-time single address info, use address lookup tools
+- Use getSupplyInfo tool for tokenomics queries (circulating supply, locked amounts, vesting breakdowns, burned tokens)`;
 
     // First AI call with tools
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
