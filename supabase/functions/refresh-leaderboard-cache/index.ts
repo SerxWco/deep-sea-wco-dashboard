@@ -22,15 +22,15 @@ const EXCHANGE_WALLETS: Record<string, string> = {
 };
 
 const ALL_CATEGORIES = [
-  { name: 'Kraken', emoji: '🐙', minBalance: 10000000 },
-  { name: 'Whale', emoji: '🐋', minBalance: 1000000 },
-  { name: 'Dolphin', emoji: '🐬', minBalance: 100000 },
-  { name: 'Shark', emoji: '🦈', minBalance: 50000 },
-  { name: 'Octopus', emoji: '🐙', minBalance: 10000 },
-  { name: 'Seal', emoji: '🦭', minBalance: 5000 },
-  { name: 'Turtle', emoji: '🐢', minBalance: 1000 },
-  { name: 'Fish', emoji: '🐟', minBalance: 100 },
-  { name: 'Shrimp', emoji: '🦐', minBalance: 0 },
+  { name: 'Kraken', emoji: '🦑', minBalance: 5000000 },
+  { name: 'Whale', emoji: '🐋', minBalance: 1000001 },
+  { name: 'Shark', emoji: '🦈', minBalance: 500001 },
+  { name: 'Dolphin', emoji: '🐬', minBalance: 100001 },
+  { name: 'Fish', emoji: '🐟', minBalance: 50001 },
+  { name: 'Octopus', emoji: '🐙', minBalance: 10001 },
+  { name: 'Crab', emoji: '🦀', minBalance: 1001 },
+  { name: 'Shrimp', emoji: '🦐', minBalance: 1 },
+  { name: 'Plankton', emoji: '🦠', minBalance: 0 },
 ];
 
 function categorizeWallet(balance: number, address: string) {
