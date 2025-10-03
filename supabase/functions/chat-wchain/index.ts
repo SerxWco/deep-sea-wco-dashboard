@@ -252,6 +252,20 @@ const tools = [
       description: "Get detailed WCO token supply information including circulating supply, locked supply (validators, vesting contracts), burned tokens, and tokenomics breakdown",
       parameters: { type: "object", properties: {} }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getTokenPrice",
+      description: "Get real-time USD price for W-Chain tokens (WCO, WAVE). Prices are cached for 1 minute. WAVE price is calculated using WAVE/WCO trading pair rate multiplied by WCO USD price.",
+      parameters: {
+        type: "object",
+        properties: {
+          symbol: { type: "string", enum: ["WCO", "WAVE"], description: "Token symbol to fetch price for" }
+        },
+        required: ["symbol"]
+      }
+    }
   }
 ];
 
@@ -629,6 +643,27 @@ async function executeGetSupplyInfo() {
   }
 }
 
+async function executeGetTokenPrice(args: any) {
+  try {
+    const symbol = args.symbol.toLowerCase();
+    const response = await fetch(`https://oracle.w-chain.com/api/price/${symbol}`);
+    if (!response.ok) throw new Error(`Price API error: ${response.status}`);
+    const data = await response.json();
+    
+    return {
+      price: data.price,
+      asset: data.asset,
+      baseCurrency: data.base_currency,
+      note: symbol === 'wave' 
+        ? 'WAVE price calculated using WAVE/WCO trading pair rate × WCO USD price'
+        : 'Price from real-time WCO price feed',
+      cacheTTL: '60 seconds'
+    };
+  } catch (error) {
+    return { error: `Failed to fetch ${args.symbol} price: ${error.message}` };
+  }
+}
+
 // Tool router
 async function executeTool(toolName: string, args: any) {
   console.log(`Executing: ${toolName}`, args);
@@ -649,7 +684,8 @@ async function executeTool(toolName: string, args: any) {
     getSmartContracts: executeGetSmartContracts,
     getTransactionCharts: executeGetTransactionCharts,
     getDailyMetrics: executeGetDailyMetrics,
-    getSupplyInfo: executeGetSupplyInfo
+    getSupplyInfo: executeGetSupplyInfo,
+    getTokenPrice: executeGetTokenPrice
   };
 
   return executors[toolName] ? await executors[toolName](args) : { error: `Unknown tool: ${toolName}` };
@@ -743,6 +779,28 @@ Mainnet Network Configuration:
 - Block Explorer: https://scan.w-chain.com
 
 To connect: Add as "Custom Network" in your wallet app using the above configuration.
+
+**Token Price API:**
+Real-time USD prices available via Oracle API (cached 1 minute):
+- WCO Price: Direct from price feed (https://oracle.w-chain.com/api/price/wco)
+- WAVE Price: Calculated using WAVE/WCO pair rate × WCO USD price (https://oracle.w-chain.com/api/price/wave)
+- Use getTokenPrice tool for price queries
+- Prices update in real-time based on market activity
+- WAVE price depends on both WCO price and trading pair data from W-Chain DEX
+
+Response Format:
+{
+  "price": number (USD),
+  "asset": "WCO" | "WAVE",
+  "base_currency": "USD"
+}
+
+Use Cases:
+- Portfolio valuation
+- Trading interfaces
+- Market cap calculations (combine with supply data)
+- Balance display in wallets
+- Fee calculations
 
 Supply Calculation:
 - Formula: Circulating Supply = Initial Supply - Locked Supply - Burned Supply
