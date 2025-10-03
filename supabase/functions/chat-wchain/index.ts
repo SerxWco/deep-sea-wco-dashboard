@@ -425,22 +425,37 @@ async function executeGetAddressInfo(args: any) {
 
 async function executeGetTopHolders(args: any) {
   try {
-    const data = await fetchAPI('/addresses?type=JSON', 300000);
-    let holders = (data.items || []).map((w: any) => {
-      const balance = parseFloat(w.coin_balance || '0') / 1e18;
-      return {
-        address: w.hash,
-        balance: balance,
-        category: categorizeWallet(balance),
-        transactionCount: w.tx_count
-      };
-    });
-
+    let query = supabase
+      .from('wallet_leaderboard_cache')
+      .select('address, balance, category, emoji, transaction_count')
+      .order('balance', { ascending: false });
+    
     if (args.category) {
-      holders = holders.filter((h: any) => h.category.includes(args.category));
+      query = query.ilike('category', `%${args.category}%`);
     }
-
-    return { holders: holders.slice(0, args.limit || 50), total: holders.length };
+    
+    query = query.limit(args.limit || 50);
+    
+    const { data: holders, error } = await query;
+    if (error) throw error;
+    
+    // Get total count from metadata
+    const { data: metadata } = await supabase
+      .from('wallet_cache_metadata')
+      .select('total_holders')
+      .order('last_refresh', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    return {
+      holders: holders.map(h => ({
+        address: h.address,
+        balance: Number(h.balance),
+        category: `${h.category} ${h.emoji}`,
+        transactionCount: h.transaction_count
+      })),
+      total: metadata?.total_holders || holders.length
+    };
   } catch (error) {
     return { error: `Failed to fetch holders: ${error.message}` };
   }
@@ -448,31 +463,30 @@ async function executeGetTopHolders(args: any) {
 
 async function executeGetHolderDistribution() {
   try {
-    const data = await fetchAPI('/addresses?type=JSON', 300000);
-    const holders = data.items || [];
+    // Get all holders from cache
+    const { data: holders, error } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('category, emoji');
     
-    const dist: Record<string, number> = {
-      "Kraken 🦑": 0,
-      "Whale 🐋": 0,
-      "Shark 🦈": 0,
-      "Dolphin 🐬": 0,
-      "Fish 🐟": 0,
-      "Shrimp 🦐": 0
-    };
-
-    holders.forEach((h: any) => {
-      const balance = parseFloat(h.coin_balance || '0') / 1e18;
-      const cat = categorizeWallet(balance);
-      dist[cat]++;
+    if (error) throw error;
+    
+    // Count by category
+    const dist: Record<string, number> = {};
+    holders.forEach(h => {
+      const key = `${h.category} ${h.emoji}`;
+      dist[key] = (dist[key] || 0) + 1;
     });
-
+    
     const total = holders.length;
+    
     return {
-      distribution: Object.entries(dist).map(([name, count]) => ({
-        category: name,
-        count,
-        percentage: ((count / total) * 100).toFixed(2)
-      })),
+      distribution: Object.entries(dist)
+        .map(([category, count]) => ({
+          category,
+          count,
+          percentage: ((count / total) * 100).toFixed(2)
+        }))
+        .sort((a, b) => b.count - a.count),
       totalHolders: total
     };
   } catch (error) {
@@ -638,7 +652,8 @@ serve(async (req) => {
 - WCO is the native coin/token of W-Chain
 - When users ask about "tokens", clarify if they mean WCO, specific ERC-20 tokens, or NFTs
 - All balances are in WCO unless otherwise specified
-- Always provide current/real-time data when available`;
+- Always provide current/real-time data when available
+- Wallet holder data (distribution, top holders) is cached and refreshed hourly for performance - for real-time single address info, use address lookup tools`;
 
     // First AI call with tools
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
