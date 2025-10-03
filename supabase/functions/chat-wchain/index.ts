@@ -386,6 +386,22 @@ const tools = [
         required: ["blockNumber"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getTotalHoldersFromCache",
+      description: "Get the total number of WCO holders from the cached leaderboard data (same source as Daily Report and Ocean Creatures page)",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getCategoryStats",
+      description: "Get detailed Ocean Creature category statistics showing holder count, total WCO held, and percentage breakdown for each tier (Kraken, Whale, Shark, Dolphin, Fish, Octopus, Crab, Shrimp, Plankton)",
+      parameters: { type: "object", properties: {} }
+    }
   }
 ];
 
@@ -1084,6 +1100,93 @@ async function executeGetBlockCountdown(args: any) {
   }
 }
 
+// Execute get total holders from cache
+async function executeGetTotalHoldersFromCache() {
+  try {
+    const { data: metadata, error } = await supabase
+      .from('wallet_cache_metadata')
+      .select('total_holders, last_refresh, refresh_status')
+      .order('last_refresh', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (error) throw error;
+    
+    if (!metadata) {
+      return { 
+        error: "Holder count is not available yet. The cache is being refreshed.",
+        status: "pending"
+      };
+    }
+    
+    return {
+      totalHolders: metadata.total_holders,
+      lastRefresh: metadata.last_refresh,
+      status: metadata.refresh_status,
+      source: "Supabase cache (same as Daily Report and Ocean Creatures)"
+    };
+  } catch (error) {
+    console.error('Total holders cache error:', error);
+    return { error: `Failed to get total holders: ${error.message}` };
+  }
+}
+
+// Execute get category stats
+async function executeGetCategoryStats() {
+  try {
+    const { data: holders, error } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('category, emoji, balance');
+    
+    if (error) throw error;
+    
+    if (!holders || holders.length === 0) {
+      return { 
+        error: "Category statistics are not available yet. The cache is being refreshed." 
+      };
+    }
+    
+    // Calculate stats per category
+    const categoryMap: Record<string, { count: number; totalBalance: number; emoji: string }> = {};
+    let grandTotal = 0;
+    
+    holders.forEach(h => {
+      const balance = Number(h.balance);
+      grandTotal += balance;
+      
+      if (!categoryMap[h.category]) {
+        categoryMap[h.category] = { count: 0, totalBalance: 0, emoji: h.emoji };
+      }
+      categoryMap[h.category].count++;
+      categoryMap[h.category].totalBalance += balance;
+    });
+    
+    // Sort by balance threshold (Kraken to Plankton)
+    const categoryOrder = ["Kraken", "Whale", "Shark", "Dolphin", "Fish", "Octopus", "Crab", "Shrimp", "Plankton"];
+    const stats = categoryOrder
+      .filter(cat => categoryMap[cat])
+      .map(category => ({
+        category: `${category} ${categoryMap[category].emoji}`,
+        holders: categoryMap[category].count,
+        totalWCO: categoryMap[category].totalBalance.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+        percentOfHolders: ((categoryMap[category].count / holders.length) * 100).toFixed(2) + '%',
+        percentOfSupply: ((categoryMap[category].totalBalance / grandTotal) * 100).toFixed(2) + '%',
+        avgBalance: (categoryMap[category].totalBalance / categoryMap[category].count).toLocaleString('en-US', { maximumFractionDigits: 2 })
+      }));
+    
+    return {
+      statistics: stats,
+      totalHolders: holders.length,
+      totalWCOInWallets: grandTotal.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+      source: "Supabase cache (same as Ocean Creatures distribution)",
+      note: "These are the 9 Ocean Creature tiers based on WCO balance thresholds"
+    };
+  } catch (error) {
+    console.error('Category stats error:', error);
+    return { error: `Failed to get category stats: ${error.message}` };
+  }
+}
+
 // Tool router
 async function executeTool(toolName: string, args: any) {
   console.log(`Executing: ${toolName}`, args);
@@ -1112,7 +1215,9 @@ async function executeTool(toolName: string, args: any) {
     getMultipleBalances: executeGetMultipleBalances,
     getBlockReward: executeGetBlockReward,
     getTransactionStatus: executeGetTransactionStatus,
-    getBlockCountdown: executeGetBlockCountdown
+    getBlockCountdown: executeGetBlockCountdown,
+    getTotalHoldersFromCache: executeGetTotalHoldersFromCache,
+    getCategoryStats: executeGetCategoryStats
   };
 
   return executors[toolName] ? await executors[toolName](args) : { error: `Unknown tool: ${toolName}` };
@@ -1274,6 +1379,30 @@ Supply Calculation:
 - "As and When Applicable" releases are event-triggered (listings, feature launches, partnerships)
 - Validation nodes' 100M WCO remains permanently locked for network security
 
+**Holder Data Source (IMPORTANT):**
+- WCO holder data (total holders, distribution, top holders) comes from the SAME Supabase cache used by:
+  * Daily Report Generator (daily metrics and comparisons)
+  * Ocean Creatures leaderboard (wallet rankings and categories)
+- This ensures consistent, accurate data across the entire platform
+- Cache is refreshed hourly via the refresh-leaderboard-cache function
+- Use these tools for holder queries:
+  * getTotalHoldersFromCache - Get total WCO holder count
+  * getHolderDistribution - Get distribution across all Ocean Creature categories
+  * getTopHolders - Get top holders by balance (with optional category filter)
+  * getCategoryStats - Get detailed statistics per category (holders, total WCO, percentages, averages)
+- For real-time individual address balances, use getAddressInfo instead
+
+**Ocean Creature Categories (9 tiers based on WCO balance):**
+1. Kraken 🦑: ≥5,000,000 WCO
+2. Whale 🐋: 1,000,001 - 4,999,999 WCO
+3. Shark 🦈: 500,001 - 1,000,000 WCO
+4. Dolphin 🐬: 100,001 - 500,000 WCO
+5. Fish 🐟: 50,001 - 100,000 WCO
+6. Octopus 🐙: 10,001 - 50,000 WCO
+7. Crab 🦀: 1,001 - 10,000 WCO
+8. Shrimp 🦐: 1 - 1,000 WCO
+9. Plankton 🦠: <1 WCO
+
 **Response Formatting Guidelines:**
 - Use clear headings, bullet points, and tables
 - Format large numbers with commas (e.g., 1,234,567)
@@ -1287,7 +1416,7 @@ Supply Calculation:
 - When users ask about "tokens", clarify if they mean WCO, specific ERC-20 tokens, or NFTs
 - All balances are in WCO unless otherwise specified
 - Always provide current/real-time data when available
-- Wallet holder data (distribution, top holders) is cached and refreshed hourly for performance - for real-time single address info, use address lookup tools
+- Holder statistics are sourced from the same cache as the Daily Report and Ocean Creatures page for data consistency
 - Use getSupplyInfo tool for tokenomics queries (circulating supply, locked amounts, vesting breakdowns, burned tokens)`;
 
     // First AI call with tools
