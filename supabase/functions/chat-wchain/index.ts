@@ -485,31 +485,77 @@ async function executeGetTopHolders(args: any) {
 
 async function executeGetHolderDistribution() {
   try {
-    // Get all holders from cache
-    const { data: holders, error } = await supabase
+    // Try cache first
+    const { data: cachedHolders } = await supabase
       .from('wallet_leaderboard_cache')
       .select('category, emoji');
     
-    if (error) throw error;
+    // If cache has data, use it
+    if (cachedHolders && cachedHolders.length > 0) {
+      const dist: Record<string, number> = {};
+      cachedHolders.forEach(h => {
+        const key = `${h.category} ${h.emoji}`;
+        dist[key] = (dist[key] || 0) + 1;
+      });
+      
+      return {
+        distribution: Object.entries(dist)
+          .map(([category, count]) => ({
+            category,
+            count,
+            percentage: ((count / cachedHolders.length) * 100).toFixed(2)
+          }))
+          .sort((a, b) => b.count - a.count),
+        totalHolders: cachedHolders.length,
+        source: 'cache'
+      };
+    }
     
-    // Count by category
-    const dist: Record<string, number> = {};
-    holders.forEach(h => {
-      const key = `${h.category} ${h.emoji}`;
-      dist[key] = (dist[key] || 0) + 1;
+    // Fallback to GraphQL API
+    const graphqlQuery = `
+      query {
+        addresses(first: 10000, order_by: {coin_balance: desc}) {
+          hash
+          coin_balance
+        }
+      }
+    `;
+    
+    const graphqlResponse = await fetch('https://scan.w-chain.com/api/v1/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: graphqlQuery })
     });
     
-    const total = holders.length;
+    if (!graphqlResponse.ok) {
+      throw new Error('GraphQL API unavailable');
+    }
+    
+    const graphqlData = await graphqlResponse.json();
+    const addresses = graphqlData?.data?.addresses || [];
+    
+    // Categorize by balance
+    const dist: Record<string, number> = {};
+    addresses.forEach((addr: any) => {
+      const balance = parseFloat(addr.coin_balance) / 1e18;
+      if (balance > 0) {
+        const category = categorizeWallet(balance);
+        dist[category] = (dist[category] || 0) + 1;
+      }
+    });
+    
+    const totalHolders = addresses.filter((a: any) => parseFloat(a.coin_balance) > 0).length;
     
     return {
       distribution: Object.entries(dist)
         .map(([category, count]) => ({
           category,
           count,
-          percentage: ((count / total) * 100).toFixed(2)
+          percentage: totalHolders > 0 ? ((count / totalHolders) * 100).toFixed(2) : '0'
         }))
         .sort((a, b) => b.count - a.count),
-      totalHolders: total
+      totalHolders,
+      source: 'live-api'
     };
   } catch (error) {
     return { error: `Failed to analyze holders: ${error.message}` };
