@@ -864,12 +864,63 @@ async function executeGetHolderDistribution() {
     if (error) throw error;
     
     if (!holders || holders.length === 0) {
-      return { 
-        error: "Holder distribution data is not available yet. The cache is being refreshed." 
+      console.log("⚠️ Cache empty/error, falling back to REST API...");
+      
+      // Fallback to REST API with pagination
+      const allWallets: any[] = [];
+      let page = 1;
+      const limit = 50;
+      let hasMore = true;
+
+      while (hasMore && page <= 10) {
+        try {
+          const url = `https://explorer.w-chain.com/api/v2/addresses?page=${page}&filter=validated&sort=coin_balance&order=desc`;
+          const response = await fetch(url);
+          
+          if (!response.ok) break;
+          
+          const data = await response.json();
+          const items = data.items || [];
+          
+          if (items.length === 0) break;
+          
+          allWallets.push(...items);
+          console.log(`📄 Page ${page}: ${items.length} wallets (total: ${allWallets.length})`);
+          
+          hasMore = items.length >= limit;
+          page++;
+        } catch (error) {
+          console.error(`❌ Error fetching page ${page}:`, error);
+          break;
+        }
+      }
+
+      // Categorize all wallets
+      const dist: Record<string, number> = {};
+      
+      allWallets.forEach(wallet => {
+        const balance = parseFloat(wallet.coin_balance || "0") / 1e18;
+        const { category, emoji } = categorizeWallet(balance, wallet.hash);
+        const key = `${category} ${emoji}`;
+        dist[key] = (dist[key] || 0) + 1;
+      });
+
+      console.log(`✅ REST API success: returning ${allWallets.length} holders`);
+      
+      return {
+        distribution: Object.entries(dist)
+          .map(([category, count]) => ({
+            category,
+            count,
+            percentage: ((count / allWallets.length) * 100).toFixed(2)
+          }))
+          .sort((a, b) => b.count - a.count),
+        totalHolders: allWallets.length,
+        source: 'rest-api'
       };
     }
     
-    // Count by category
+    // Count by category from cache
     const dist: Record<string, number> = {};
     holders.forEach(h => {
       const key = `${h.category} ${h.emoji}`;
