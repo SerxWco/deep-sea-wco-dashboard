@@ -60,6 +60,22 @@ export function WalletLeaderboard() {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
+  const getCategoryDescription = (categoryInfo: CategoryInfo): string => {
+    // Special categories
+    if (categoryInfo.name === 'Flagship') return 'Core team/project wallets';
+    if (categoryInfo.name === 'Harbor') return 'Exchange or liquidity wallets';
+    if (categoryInfo.name === 'Bridge/Wrapped') return 'Cross-chain / wrapped assets';
+    
+    // Balance-based categories
+    if (categoryInfo.maxBalance === undefined) {
+      return `${formatNumber(categoryInfo.minBalance)}+ WCO`;
+    }
+    if (categoryInfo.minBalance === 0 && categoryInfo.maxBalance) {
+      return `< ${formatNumber(categoryInfo.maxBalance + 0.001)} WCO`;
+    }
+    return `${formatNumber(categoryInfo.minBalance)} - ${formatNumber(categoryInfo.maxBalance)} WCO`;
+  };
+
   const toggleCategory = (category: string) => {
     setOpenCategories(prev => ({
       ...prev,
@@ -180,7 +196,12 @@ export function WalletLeaderboard() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">{categoryInfo.emoji}</span>
-                          <span className="font-semibold text-lg">{categoryInfo.name}</span>
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-lg">{categoryInfo.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {getCategoryDescription(categoryInfo)}
+                            </span>
+                          </div>
                         </div>
                         <Badge 
                           variant={hasWallets ? "default" : "secondary"} 
