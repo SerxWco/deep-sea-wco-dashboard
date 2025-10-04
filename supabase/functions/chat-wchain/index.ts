@@ -724,38 +724,133 @@ async function executeGetAddressInfo(args: any) {
 
 async function executeGetTopHolders(args: any) {
   try {
+    const requestedLimit = args.limit || 50;
+    const categoryFilter = args.category?.toLowerCase();
+    
+    console.log(`🔍 Fetching top holders (limit: ${requestedLimit}, category: ${categoryFilter || 'all'})`);
+    
+    // STEP 1: Try Supabase cache first (fast path)
     let query = supabase
       .from('wallet_leaderboard_cache')
       .select('address, balance, category, emoji, transaction_count')
       .order('balance', { ascending: false });
     
-    if (args.category) {
-      query = query.ilike('category', `%${args.category}%`);
+    if (categoryFilter) {
+      query = query.ilike('category', `%${categoryFilter}%`);
     }
     
-    query = query.limit(args.limit || 50);
+    const { data: cachedHolders, error: cacheError } = await query.limit(requestedLimit);
     
-    const { data: holders, error } = await query;
-    if (error) throw error;
+    if (!cacheError && cachedHolders && cachedHolders.length > 0) {
+      console.log(`✅ Cache hit: ${cachedHolders.length} holders from Supabase cache`);
+      
+      // Get total count from metadata
+      const { data: metadata } = await supabase
+        .from('wallet_cache_metadata')
+        .select('total_holders')
+        .order('last_refresh', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      return {
+        holders: cachedHolders.map(h => ({
+          address: h.address,
+          balance: Number(h.balance),
+          category: `${h.category} ${h.emoji}`,
+          transactionCount: h.transaction_count
+        })),
+        total: metadata?.total_holders || cachedHolders.length,
+        source: 'wallet_leaderboard_cache'
+      };
+    }
     
-    // Get total count from metadata
-    const { data: metadata } = await supabase
-      .from('wallet_cache_metadata')
-      .select('total_holders')
-      .order('last_refresh', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    console.log('⚠️ Cache empty/error, falling back to REST API...');
+    
+    // STEP 2: Fallback to REST API (same as frontend useWalletLeaderboard)
+    const allWallets = [];
+    const ITEMS_PER_PAGE = 50;
+    let currentPage = 1;
+    let hasMore = true;
+    
+    // Fetch enough pages to get the requested limit
+    const maxPagesToFetch = Math.ceil(requestedLimit / ITEMS_PER_PAGE) + 5; // +5 buffer for filtering
+    
+    while (hasMore && currentPage <= maxPagesToFetch) {
+      try {
+        const pageData = await fetchAPI(
+          `/addresses?page=${currentPage}&items_count=${ITEMS_PER_PAGE}`,
+          30000 // 30s cache
+        );
+        
+        if (!pageData?.items || pageData.items.length === 0) {
+          hasMore = false;
+          break;
+        }
+        
+        // Categorize each wallet
+        for (const wallet of pageData.items) {
+          const balance = Number(wallet.coin_balance) / 1e18;
+          const category = categorizeWallet(balance, wallet.hash);
+          
+          allWallets.push({
+            address: wallet.hash,
+            balance: balance,
+            category: category.category,
+            emoji: category.emoji,
+            label: category.label,
+            transactionCount: wallet.tx_count || 0
+          });
+        }
+        
+        console.log(`📄 Page ${currentPage}: ${pageData.items.length} wallets (total: ${allWallets.length})`);
+        
+        hasMore = pageData.next_page_params !== null;
+        currentPage++;
+        
+        // Small delay to avoid rate limiting
+        if (hasMore) await new Promise(resolve => setTimeout(resolve, 50));
+      } catch (pageError) {
+        console.error(`Page ${currentPage} failed:`, pageError);
+        hasMore = false;
+      }
+    }
+    
+    if (allWallets.length === 0) {
+      return { 
+        error: "Oops, hit a reef there! 🪸 Couldn't fetch holder data from any source right now. Please try again in a moment!" 
+      };
+    }
+    
+    // Apply category filter if specified
+    let filteredWallets = allWallets;
+    if (categoryFilter) {
+      filteredWallets = allWallets.filter(w => 
+        w.category.toLowerCase().includes(categoryFilter)
+      );
+      console.log(`🔍 Filtered to ${filteredWallets.length} wallets in category "${categoryFilter}"`);
+    }
+    
+    // Sort by balance and take top N
+    filteredWallets.sort((a, b) => b.balance - a.balance);
+    const topHolders = filteredWallets.slice(0, requestedLimit);
+    
+    console.log(`✅ REST API success: returning ${topHolders.length} holders`);
     
     return {
-      holders: holders.map(h => ({
+      holders: topHolders.map(h => ({
         address: h.address,
-        balance: Number(h.balance),
+        balance: h.balance,
         category: `${h.category} ${h.emoji}`,
-        transactionCount: h.transaction_count
+        transactionCount: h.transactionCount,
+        label: h.label
       })),
-      total: metadata?.total_holders || holders.length
+      total: filteredWallets.length,
+      source: 'rest-api-fallback',
+      note: 'Data from live W-Chain API (cache was unavailable)'
     };
+    
   } catch (error) {
+    console.error('❌ Get top holders failed:', error);
     return { error: `Failed to fetch holders: ${error.message}` };
   }
 }
