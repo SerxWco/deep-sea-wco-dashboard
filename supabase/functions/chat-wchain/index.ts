@@ -1801,16 +1801,25 @@ Supply Calculation:
   * getCategoryStats - Get detailed statistics per category (holders, total WCO, percentages, averages)
 - For real-time individual address balances, use getAddressInfo instead
 
-**Ocean Creature Categories (9 tiers based on WCO balance):**
-1. Kraken 🦑: ≥5,000,000 WCO
-2. Whale 🐋: 1,000,001 - 4,999,999 WCO
-3. Shark 🦈: 500,001 - 1,000,000 WCO
-4. Dolphin 🐬: 100,001 - 500,000 WCO
-5. Fish 🐟: 50,001 - 100,000 WCO
-6. Octopus 🐙: 10,001 - 50,000 WCO
-7. Crab 🦀: 1,001 - 10,000 WCO
-8. Shrimp 🦐: 1 - 1,000 WCO
-9. Plankton 🦠: <1 WCO
+**WCO Holder Tiering System (12 tiers):**
+
+Special Categories (Priority Override):
+1. Flagship 🚩: Core team/project wallets
+2. Harbor ⚓: Exchange or liquidity wallets
+3. Bridge/Wrapped 🌉: Cross-chain / wrapped assets
+
+Balance-Based Categories:
+4. Kraken 🦑: ≥5,000,000 WCO
+5. Whale 🐋: 1,000,001 - 4,999,999 WCO
+6. Shark 🦈: 500,001 - 1,000,000 WCO
+7. Dolphin 🐬: 100,001 - 500,000 WCO
+8. Fish 🐟: 50,001 - 100,000 WCO
+9. Octopus 🐙: 10,001 - 50,000 WCO
+10. Crab 🦀: 1,001 - 10,000 WCO
+11. Shrimp 🦐: 1 - 1,000 WCO
+12. Plankton 🦠: <1 WCO
+
+Note: When discussing wallets, always use the correct tier emoji and name. Special category wallets (Flagship, Harbor, Bridge) take priority over balance-based tiers.
 
 **Response Formatting Guidelines:**
 - Use clear headings, bullet points, and tables
