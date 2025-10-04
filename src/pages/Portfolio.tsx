@@ -3,15 +3,15 @@ import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { useWChainTokens } from '@/hooks/useWChainTokens';
 import { useTokenBalances } from '@/hooks/useTokenBalances';
 import { useWalletTokenScanner } from '@/hooks/useWalletTokenScanner';
-import { usePortfolioHistory } from '@/hooks/usePortfolioHistory';
-import { usePortfolioPnL } from '@/hooks/usePortfolioPnL';
+// import { usePortfolioHistory } from '@/hooks/usePortfolioHistory';
+// import { usePortfolioPnL } from '@/hooks/usePortfolioPnL';
 import { WalletConnectButton } from '@/components/WalletConnectButton';
 import { WalletInfo } from '@/components/WalletInfo';
 import { TokenHoldings } from '@/components/TokenHoldings';
 import { AddCustomTokenForm } from '@/components/AddCustomTokenForm';
 import { PortfolioSummary } from '@/components/PortfolioSummary';
-import { PnLWidget } from '@/components/PnLWidget';
-import { PortfolioPerformanceChart } from '@/components/PortfolioPerformanceChart';
+// import { PnLWidget } from '@/components/PnLWidget';
+// import { PortfolioPerformanceChart } from '@/components/PortfolioPerformanceChart';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle } from 'lucide-react';
@@ -49,28 +49,28 @@ const Portfolio = () => {
     addCustomToken
   } = useWalletTokenScanner(walletInfo?.address || null, tokens);
 
-  // Portfolio performance tracking
-  const { createSnapshot } = usePortfolioHistory(walletInfo?.address || null);
-  const { metrics, chartData } = usePortfolioPnL(allBalances, walletInfo?.address || null);
+  // Portfolio performance tracking - TEMPORARILY DISABLED
+  // const { createSnapshot } = usePortfolioHistory(walletInfo?.address || null);
+  // const { metrics, chartData } = usePortfolioPnL(allBalances, walletInfo?.address || null);
 
   // Auto-create snapshot when wallet connects and balances are loaded
-  useEffect(() => {
-    if (walletInfo?.address && allBalances.length > 0 && !scannerLoading) {
-      const totalValue = allBalances.reduce((sum, balance) => {
-        const priceValue = parseFloat(balance.token.exchange_rate || '0');
-        if (priceValue > 0) {
-          return sum + (priceValue * balance.balanceInEth);
-        }
-        return sum + (balance.usdValue || 0);
-      }, 0);
-      
-      // Only create snapshot if total value is > 0
-      if (totalValue > 0) {
-        console.log('Auto-creating portfolio snapshot:', { totalValue, tokens: allBalances.length });
-        createSnapshot(walletInfo.address, totalValue, allBalances);
-      }
-    }
-  }, [walletInfo?.address, allBalances, scannerLoading, createSnapshot]);
+  // useEffect(() => {
+  //   if (walletInfo?.address && allBalances.length > 0 && !scannerLoading) {
+  //     const totalValue = allBalances.reduce((sum, balance) => {
+  //       const priceValue = parseFloat(balance.token.exchange_rate || '0');
+  //       if (priceValue > 0) {
+  //         return sum + (priceValue * balance.balanceInEth);
+  //       }
+  //       return sum + (balance.usdValue || 0);
+  //     }, 0);
+  //     
+  //     // Only create snapshot if total value is > 0
+  //     if (totalValue > 0) {
+  //       console.log('Auto-creating portfolio snapshot:', { totalValue, tokens: allBalances.length });
+  //       createSnapshot(walletInfo.address, totalValue, allBalances);
+  //     }
+  //   }
+  // }, [walletInfo?.address, allBalances, scannerLoading, createSnapshot]);
 
   const handleRefreshPortfolio = () => {
     refreshTokens();
@@ -142,8 +142,8 @@ const Portfolio = () => {
                   onDisconnect={disconnectWallet}
                 />
 
-                {/* Performance Widgets */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Performance Widgets - TEMPORARILY DISABLED */}
+                {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <PnLWidget
                     metrics={metrics}
                     loading={tokensLoading || balancesLoading || scannerLoading}
@@ -152,7 +152,7 @@ const Portfolio = () => {
                     data={chartData}
                     loading={tokensLoading || balancesLoading || scannerLoading}
                   />
-                </div>
+                </div> */}
 
                 {/* Token Holdings with Tabs */}
                 <Tabs defaultValue="all" className="w-full">
