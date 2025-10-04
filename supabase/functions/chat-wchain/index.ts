@@ -492,6 +492,44 @@ const tools = [
       description: "Get detailed Ocean Creature category statistics showing holder count, total WCO held, and percentage breakdown for each tier (Kraken, Whale, Shark, Dolphin, Fish, Octopus, Crab, Shrimp, Plankton)",
       parameters: { type: "object", properties: {} }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getWcoVolume",
+      description: "Calculate total WCO transaction volume for a specific time period. Data is sourced from daily_metrics table when available (fast, accurate) with fallback to live API aggregation.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { 
+            type: "string", 
+            enum: ["24h", "7d"], 
+            description: "Time period to analyze (default: 24h)"
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getMostActiveWallet",
+      description: "Find the wallet with the most transaction activity (both sent and received) in a time period. Can optionally exclude flagship wallets and exchanges.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { 
+            type: "string", 
+            enum: ["today", "24h", "7d"],
+            description: "Time period to analyze (default: today)"
+          },
+          excludeSpecial: {
+            type: "boolean",
+            description: "Exclude flagship wallets and exchanges from results (default: true)"
+          }
+        }
+      }
+    }
   }
 ];
 
@@ -1342,6 +1380,204 @@ async function executeGetCategoryStats() {
   }
 }
 
+// Execute get WCO volume
+async function executeGetWcoVolume(args: any) {
+  try {
+    const period = args?.period || "24h";
+    const days = period === "7d" ? 7 : 1;
+    
+    console.log(`📊 Calculating WCO volume for period: ${period}`);
+    
+    // STEP 1: Try daily_metrics table (fast, accurate)
+    if (days === 1) {
+      const { data: metrics, error } = await supabase
+        .from('daily_metrics')
+        .select('wco_moved_24h, snapshot_date')
+        .order('snapshot_date', { ascending: false })
+        .limit(1);
+      
+      if (!error && metrics && metrics[0]?.wco_moved_24h) {
+        const volume = Number(metrics[0].wco_moved_24h);
+        console.log(`✅ Daily metrics hit: ${volume} WCO`);
+        return {
+          period,
+          totalVolume: volume.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+          totalVolumeRaw: volume,
+          source: 'daily_metrics',
+          note: 'Data from Daily Report cache (24h snapshot)',
+          date: metrics[0].snapshot_date
+        };
+      }
+    }
+    
+    console.log('⚠️ Daily metrics unavailable, falling back to live API...');
+    
+    // STEP 2: Fallback to live API aggregation
+    const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
+    let totalVolume = 0;
+    let page = 1;
+    let hasMore = true;
+    let transactionCount = 0;
+    
+    while (hasMore && page <= 20) { // Safety limit
+      try {
+        const data = await fetchAPI(`/token-transfers?limit=50&page=${page}`, 10000);
+        
+        if (!data?.items || data.items.length === 0) {
+          hasMore = false;
+          break;
+        }
+        
+        for (const tx of data.items) {
+          const txTime = new Date(tx.timestamp).getTime();
+          if (txTime > cutoffTime) {
+            // Convert from wei to WCO (divide by 10^18)
+            const valueInWCO = Number(tx.value) / 1e18;
+            totalVolume += valueInWCO;
+            transactionCount++;
+          } else {
+            hasMore = false; // We've gone past the time window
+            break;
+          }
+        }
+        
+        hasMore = hasMore && data.next_page_params !== null;
+        page++;
+        
+        if (hasMore) await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (err) {
+        console.error(`Page ${page} failed:`, err);
+        hasMore = false;
+      }
+    }
+    
+    console.log(`✅ API aggregation complete: ${totalVolume} WCO from ${transactionCount} transfers`);
+    
+    return {
+      period,
+      totalVolume: totalVolume.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+      totalVolumeRaw: totalVolume,
+      transferCount: transactionCount,
+      source: 'live-api',
+      note: `Aggregated from recent token transfers (scanned ${page - 1} pages)`,
+      warning: transactionCount >= 1000 ? 'Volume may be underestimated due to API pagination limits' : undefined
+    };
+    
+  } catch (error) {
+    console.error('❌ WCO volume calculation failed:', error);
+    return { error: `Failed to calculate WCO volume: ${error.message}` };
+  }
+}
+
+// Execute get most active wallet
+async function executeGetMostActiveWallet(args: any) {
+  try {
+    const period = args?.period || "today";
+    const excludeSpecial = args?.excludeSpecial !== false; // Default true
+    
+    console.log(`🔍 Finding most active wallet for period: ${period}, excludeSpecial: ${excludeSpecial}`);
+    
+    // Calculate cutoff time
+    let cutoffTime: number;
+    if (period === "today") {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      cutoffTime = today.getTime();
+    } else if (period === "7d") {
+      cutoffTime = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    } else {
+      cutoffTime = Date.now() - (24 * 60 * 60 * 1000);
+    }
+    
+    // Fetch transactions and build activity map
+    const activityMap: Record<string, number> = {};
+    let page = 1;
+    let hasMore = true;
+    let totalTxs = 0;
+    
+    while (hasMore && page <= 20) { // Safety limit
+      try {
+        const data = await fetchAPI(`/transactions?limit=50&page=${page}`, 10000);
+        
+        if (!data?.items || data.items.length === 0) {
+          hasMore = false;
+          break;
+        }
+        
+        for (const tx of data.items) {
+          const txTime = new Date(tx.timestamp).getTime();
+          if (txTime > cutoffTime) {
+            activityMap[tx.from.hash] = (activityMap[tx.from.hash] || 0) + 1;
+            if (tx.to?.hash) {
+              activityMap[tx.to.hash] = (activityMap[tx.to.hash] || 0) + 1;
+            }
+            totalTxs++;
+          } else {
+            hasMore = false;
+            break;
+          }
+        }
+        
+        hasMore = hasMore && data.next_page_params !== null;
+        page++;
+        
+        if (hasMore) await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (err) {
+        console.error(`Page ${page} failed:`, err);
+        hasMore = false;
+      }
+    }
+    
+    console.log(`📊 Analyzed ${totalTxs} transactions, ${Object.keys(activityMap).length} unique addresses`);
+    
+    // Filter out special wallets if requested
+    let candidates = Object.entries(activityMap);
+    
+    if (excludeSpecial) {
+      candidates = candidates.filter(([address]) => {
+        const lowerAddr = address.toLowerCase();
+        const isFlagship = Object.keys(FLAGSHIP_WALLETS).some(a => a.toLowerCase() === lowerAddr);
+        const isExchange = Object.keys(EXCHANGE_WALLETS).some(a => a.toLowerCase() === lowerAddr);
+        const isWrapped = WRAPPED_WCO.some(a => a.toLowerCase() === lowerAddr);
+        return !isFlagship && !isExchange && !isWrapped;
+      });
+    }
+    
+    if (candidates.length === 0) {
+      return { error: "No active wallets found in this time period" };
+    }
+    
+    // Sort by activity count
+    candidates.sort((a, b) => b[1] - a[1]);
+    const [winnerAddress, activityCount] = candidates[0];
+    
+    // Get balance info
+    const addressInfo = await fetchAPI(`/addresses/${winnerAddress}`, 30000);
+    const balance = addressInfo?.coin_balance ? Number(addressInfo.coin_balance) / 1e18 : 0;
+    const category = categorizeWallet(balance, winnerAddress);
+    
+    console.log(`🏆 Winner: ${winnerAddress} with ${activityCount} activities`);
+    
+    return {
+      period,
+      address: winnerAddress,
+      activityCount,
+      balance: balance.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+      category: category.category,
+      emoji: category.emoji,
+      label: category.label,
+      totalTransactionsAnalyzed: totalTxs,
+      excludedSpecialWallets: excludeSpecial,
+      source: 'live-api',
+      note: `Scanned ${page - 1} pages of recent transactions`
+    };
+    
+  } catch (error) {
+    console.error('❌ Most active wallet search failed:', error);
+    return { error: `Failed to find most active wallet: ${error.message}` };
+  }
+}
+
 // Tool router
 async function executeTool(toolName: string, args: any) {
   console.log(`Executing: ${toolName}`, args);
@@ -1372,7 +1608,9 @@ async function executeTool(toolName: string, args: any) {
     getTransactionStatus: executeGetTransactionStatus,
     getBlockCountdown: executeGetBlockCountdown,
     getTotalHoldersFromCache: executeGetTotalHoldersFromCache,
-    getCategoryStats: executeGetCategoryStats
+    getCategoryStats: executeGetCategoryStats,
+    getWcoVolume: executeGetWcoVolume,
+    getMostActiveWallet: executeGetMostActiveWallet
   };
 
   return executors[toolName] ? await executors[toolName](args) : { error: `Unknown tool: ${toolName}` };
@@ -1442,6 +1680,8 @@ You can now answer advanced queries including:
 - Block mining rewards and uncle inclusion data
 - Transaction execution status and receipt details
 - Block countdown estimates and timing predictions
+- **WCO volume analysis**: Calculate total WCO moved in 24h or 7d periods (sourced from Daily Report when available)
+- **Most active wallet detection**: Find the most active wallet by transaction count in any time period
 
 **The W-Chain Ecosystem:**
 - Native WCO Token: holders, balances, transfers, distribution, categories (Kraken 🦑, Whale 🐋, Shark 🦈, Dolphin 🐬, Fish 🐟, Octopus 🐙, Crab 🦀, Shrimp 🦐, Plankton 🦠)
