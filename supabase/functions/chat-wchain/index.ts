@@ -1225,7 +1225,10 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    const systemPrompt = `You are a comprehensive W-Chain blockchain explorer assistant with access to the complete W-Chain API and BlockScout integration.
+    const currentDate = new Date().toISOString().split('T')[0];
+    const systemPrompt = `Current date: ${currentDate}
+
+You are a comprehensive W-Chain blockchain explorer assistant with access to the complete W-Chain API and BlockScout integration.
 
 **W-Chain BlockScout API & RPC Endpoints:**
 - BlockScout Explorer: https://scan.w-chain.com
