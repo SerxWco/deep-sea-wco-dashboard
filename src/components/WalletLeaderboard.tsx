@@ -133,7 +133,8 @@ export function WalletLeaderboard() {
   }
 
   return (
-    <Card className="w-full bg-gradient-to-br from-background/80 to-background/40 backdrop-blur-md border-border/20">
+    <>
+      <Card className="w-full bg-gradient-to-br from-background/80 to-background/40 backdrop-blur-md border-border/20">
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-foreground flex items-center gap-2">
           🌊 Ocean Leaderboard
@@ -286,15 +287,8 @@ export function WalletLeaderboard() {
               >
                 Load More Wallets
               </Button>
-      )}
-      
-      {/* Wallet Details Modal */}
-      <WalletDetailsModal
-        isOpen={selectedWallet !== null}
-        onClose={() => setSelectedWallet(null)}
-        address={selectedWallet}
-      />
-    </div>
+            )}
+          </div>
         )}
 
         {!hasMore && wallets.length > 0 && (
@@ -304,5 +298,13 @@ export function WalletLeaderboard() {
         )}
       </CardContent>
     </Card>
+
+    {/* Wallet Details Modal */}
+    <WalletDetailsModal
+      isOpen={selectedWallet !== null}
+      onClose={() => setSelectedWallet(null)}
+      address={selectedWallet}
+      />
+    </>
   );
 }
