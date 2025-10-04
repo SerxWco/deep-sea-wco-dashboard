@@ -38,17 +38,107 @@ async function fetchAPI(endpoint: string, cacheTTL = 0) {
   return data;
 }
 
-// Categorize wallet by balance
-function categorizeWallet(balance: number): string {
-  if (balance >= 5000000) return "Kraken 🦑";
-  if (balance >= 1000001) return "Whale 🐋";
-  if (balance >= 500001) return "Shark 🦈";
-  if (balance >= 100001) return "Dolphin 🐬";
-  if (balance >= 50001) return "Fish 🐟";
-  if (balance >= 10001) return "Octopus 🐙";
-  if (balance >= 1001) return "Crab 🦀";
-  if (balance >= 1) return "Shrimp 🦐";
-  return "Plankton 🦠";
+// Special wallet definitions (matching Dashboard logic)
+const FLAGSHIP_WALLETS: Record<string, string> = {
+  "0xfAc510D5dB8cadfF323D4b979D898dc38F3FB6dF": "Validators Staking",
+  "0x2ca9472ADd8a02c74D50FC3Ea444548502E35BDb": "Marketing & Community Vesting",
+  "0x94DbFF05e1C129869772E1Fb291901083CdAdef1": "W-Chain Ecosystem Vesting",
+  "0xa237FeAFa2BAc4096867aF6229a2370B7A661A5F": "Incentives Vesting",
+  "0x80eaBD19b84b4f5f042103e957964297589C657D": "Enterprises & Partnerships Vesting",
+  "0x57Ab15Ca8Bd528D509DbC81d11E9BecA44f3445f": "Development Fund Vesting",
+  "0x5555555555555555555555555555555555555555": "Team 1",
+  "0x1111111111111111111111111111111111111111": "Marketing Fund"
+};
+
+const EXCHANGE_WALLETS: Record<string, string> = {
+  "0xE8888888888888888888888888888888888888888": "MEXC Exchange",
+  "0xB9999999999999999999999999999999999999999": "BitMart Exchange",
+  "0xC0000000000000000000000000000000000000000": "Bitrue Exchange"
+};
+
+const WRAPPED_WCO = [
+  "0xD1111111111111111111111111111111111111111",
+  "0xD2222222222222222222222222222222222222222"
+];
+
+// Helper function to categorize wallets (matching Dashboard logic)
+function categorizeWallet(balance: number, address: string): { 
+  category: string; 
+  emoji: string; 
+  label?: string;
+  isSpecial: boolean;
+} {
+  const lowerAddress = address.toLowerCase();
+  
+  // Check flagship wallets
+  const flagshipLabel = Object.entries(FLAGSHIP_WALLETS).find(
+    ([addr]) => addr.toLowerCase() === lowerAddress
+  )?.[1];
+  if (flagshipLabel) {
+    return { category: "🏛️ Flagship", emoji: "🏛️", label: flagshipLabel, isSpecial: true };
+  }
+  
+  // Check exchange wallets
+  const exchangeLabel = Object.entries(EXCHANGE_WALLETS).find(
+    ([addr]) => addr.toLowerCase() === lowerAddress
+  )?.[1];
+  if (exchangeLabel) {
+    return { category: "🏦 Exchange", emoji: "🏦", label: exchangeLabel, isSpecial: true };
+  }
+  
+  // Check wrapped WCO
+  if (WRAPPED_WCO.some(addr => addr.toLowerCase() === lowerAddress)) {
+    return { category: "📦 Wrapped WCO", emoji: "📦", label: "Wrapped WCO Contract", isSpecial: true };
+  }
+  
+  // Regular balance-based categorization
+  if (balance >= 100000000) return { category: "🐋 Mega Whale", emoji: "🐋", isSpecial: false };
+  if (balance >= 50000000) return { category: "🦈 Whale", emoji: "🦈", isSpecial: false };
+  if (balance >= 10000000) return { category: "🐬 Dolphin", emoji: "🐬", isSpecial: false };
+  if (balance >= 5000000) return { category: "🦭 Seal", emoji: "🦭", isSpecial: false };
+  if (balance >= 1000000) return { category: "🐢 Turtle", emoji: "🐢", isSpecial: false };
+  if (balance >= 500000) return { category: "🦑 Squid", emoji: "🦑", isSpecial: false };
+  if (balance >= 100000) return { category: "🦀 Crab", emoji: "🦀", isSpecial: false };
+  if (balance >= 50000) return { category: "🐙 Octopus", emoji: "🐙", isSpecial: false };
+  if (balance >= 10000) return { category: "🐡 Pufferfish", emoji: "🐡", isSpecial: false };
+  if (balance >= 1000) return { category: "🐠 Fish", emoji: "🐠", isSpecial: false };
+  return { category: "🦐 Shrimp", emoji: "🦐", isSpecial: false };
+}
+
+// GraphQL query helper for fetching network stats (matching Dashboard logic)
+async function queryGraphQL(limit: number = 5000) {
+  try {
+    const query = `
+      query NetworkStats($limit: Int!) {
+        addresses(
+          order_by: { coin_balance: desc }
+          limit: $limit
+        ) {
+          hash
+          coin_balance
+          transactions_count
+        }
+      }
+    `;
+    
+    const response = await fetch('https://explorer.w-chain.net/api/v2/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables: { limit } })
+    });
+    
+    if (!response.ok) throw new Error(`GraphQL query failed: ${response.status}`);
+    const data = await response.json();
+    
+    if (data.errors) {
+      throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+    }
+    
+    return data.data?.addresses || [];
+  } catch (error) {
+    console.error('GraphQL query failed:', error);
+    return null; // Return null to trigger fallback to REST API
+  }
 }
 
 // Tool definitions
@@ -1100,37 +1190,99 @@ async function executeGetBlockCountdown(args: any) {
   }
 }
 
-// Execute get total holders from cache
+// Execute get total holders - MIRRORS DASHBOARD LOGIC EXACTLY
 async function executeGetTotalHoldersFromCache() {
   try {
-    // Count rows in wallet_leaderboard_cache (same source as Dashboard widget)
-    const { count, error } = await supabase
+    console.log('🔍 Fetching holder count using Dashboard logic...');
+    
+    // STEP 1: Try Supabase cache first (same as Dashboard)
+    const { data: cachedWallets, error: cacheError } = await supabase
       .from('wallet_leaderboard_cache')
-      .select('*', { count: 'exact', head: true });
+      .select('address, balance');
     
-    if (error) throw error;
-    
-    // If cache is empty or unavailable, fall back to live API
-    if (!count || count === 0) {
-      console.log('Cache empty, falling back to live API');
-      const apiData = await fetchAPI('/addresses?page=1&items_count=1');
-      const totalHolders = apiData.total_count || 0;
-      
+    if (!cacheError && cachedWallets && cachedWallets.length > 0) {
+      console.log(`✅ Cache hit: ${cachedWallets.length} wallets from Supabase`);
       return {
-        totalHolders,
-        source: 'live-api',
-        note: 'Cache is currently being refreshed. Data fetched from live W-Chain API.',
-        timestamp: new Date().toISOString()
+        totalHolders: cachedWallets.length,
+        source: 'wallet_leaderboard_cache',
+        note: 'Data from Supabase cache (same as Dashboard)'
       };
     }
     
+    console.log('⚠️ Cache empty/error, trying GraphQL (fast path)...');
+    
+    // STEP 2: Try GraphQL API (same as Dashboard fast path)
+    const graphqlAddresses = await queryGraphQL(5000);
+    
+    if (graphqlAddresses && graphqlAddresses.length > 0) {
+      console.log(`✅ GraphQL success: ${graphqlAddresses.length} wallets`);
+      return {
+        totalHolders: graphqlAddresses.length,
+        source: 'graphql-api',
+        note: 'Data from GraphQL endpoint (Dashboard fallback #1)'
+      };
+    }
+    
+    console.log('⚠️ GraphQL failed, falling back to REST API pagination...');
+    
+    // STEP 3: Paginate REST API (same as Dashboard final fallback)
+    const allWallets = [];
+    const ITEMS_PER_PAGE = 50;
+    let currentPage = 1;
+    let hasMore = true;
+    
+    while (hasMore && currentPage <= 100) { // Safety limit at 5000 wallets
+      try {
+        const pageData = await fetchAPI(
+          `/addresses?page=${currentPage}&items_count=${ITEMS_PER_PAGE}`,
+          30000 // 30s cache
+        );
+        
+        if (!pageData?.items || pageData.items.length === 0) {
+          hasMore = false;
+          break;
+        }
+        
+        allWallets.push(...pageData.items);
+        console.log(`📄 Page ${currentPage}: ${pageData.items.length} wallets (total: ${allWallets.length})`);
+        
+        hasMore = pageData.next_page_params !== null;
+        currentPage++;
+        
+        // Small delay to avoid rate limiting
+        if (hasMore) await new Promise(resolve => setTimeout(resolve, 50));
+      } catch (pageError) {
+        console.error(`Page ${currentPage} failed:`, pageError);
+        hasMore = false;
+      }
+    }
+    
+    if (allWallets.length > 0) {
+      console.log(`✅ REST pagination complete: ${allWallets.length} wallets`);
+      return {
+        totalHolders: allWallets.length,
+        source: 'rest-api-paginated',
+        note: 'Data from paginated REST API (Dashboard fallback #2)',
+        pages_fetched: currentPage - 1
+      };
+    }
+    
+    // STEP 4: Last resort - try the total_count from first page
+    console.log('⚠️ All methods failed, trying API total_count as last resort...');
+    const firstPage = await fetchAPI('/addresses?page=1&items_count=1');
+    
     return {
-      totalHolders: count || 0,
-      source: "wallet_leaderboard_cache table (same as Dashboard 'Total WCO Holders' widget)"
+      totalHolders: firstPage?.total_count || 0,
+      source: 'api-total-count',
+      note: 'Fallback to API metadata (may be less accurate)'
     };
+    
   } catch (error) {
-    console.error('Total holders cache error:', error);
-    return { error: `Failed to get total holders: ${error.message}` };
+    console.error('❌ Total holders fetch failed completely:', error);
+    return { 
+      error: `Failed to get total holders: ${error.message}`,
+      note: 'All data sources (cache, GraphQL, REST API) failed'
+    };
   }
 }
 
