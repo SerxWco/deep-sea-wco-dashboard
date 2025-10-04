@@ -1103,58 +1103,16 @@ async function executeGetBlockCountdown(args: any) {
 // Execute get total holders from cache
 async function executeGetTotalHoldersFromCache() {
   try {
-    // Try cache first
-    const { data: metadata, error } = await supabase
-      .from('wallet_cache_metadata')
-      .select('total_holders, last_refresh, refresh_status')
-      .order('last_refresh', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Count rows in wallet_leaderboard_cache (same source as Dashboard widget)
+    const { count, error } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('*', { count: 'exact', head: true });
     
     if (error) throw error;
     
-    // Check if cache is fresh (less than 1 hour old) and has data
-    const isCacheFresh = metadata?.last_refresh && 
-      (Date.now() - new Date(metadata.last_refresh).getTime()) < 3600000;
-    
-    if (metadata && metadata.total_holders > 0 && isCacheFresh) {
-      return {
-        totalHolders: metadata.total_holders,
-        lastRefresh: metadata.last_refresh,
-        status: metadata.refresh_status,
-        source: "Supabase cache (same as Daily Report and Ocean Creatures)"
-      };
-    }
-    
-    // Fallback: Query API directly
-    console.log('Cache miss or stale, querying API directly...');
-    const url = `${WCHAIN_API_BASE}/addresses?page=1&items_count=1`;
-    const response = await fetchAPI(url, 'holder-count');
-    
-    if (response && response.total_count) {
-      return {
-        totalHolders: response.total_count,
-        lastRefresh: new Date().toISOString(),
-        status: "live",
-        source: "W-Chain API (direct query)",
-        note: "Retrieved directly from blockchain API because cache was unavailable or stale"
-      };
-    }
-    
-    // Last resort: return stale cache if available
-    if (metadata && metadata.total_holders > 0) {
-      return {
-        totalHolders: metadata.total_holders,
-        lastRefresh: metadata.last_refresh,
-        status: "stale",
-        source: "Stale cache (API unavailable)",
-        note: "Showing cached data because live API query failed"
-      };
-    }
-    
-    return { 
-      error: "Unable to retrieve holder count from cache or API",
-      status: metadata?.refresh_status || "unknown"
+    return {
+      totalHolders: count || 0,
+      source: "wallet_leaderboard_cache table (same as Dashboard 'Total WCO Holders' widget)"
     };
   } catch (error) {
     console.error('Total holders cache error:', error);
