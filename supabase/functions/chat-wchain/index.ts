@@ -1110,6 +1110,20 @@ async function executeGetTotalHoldersFromCache() {
     
     if (error) throw error;
     
+    // If cache is empty or unavailable, fall back to live API
+    if (!count || count === 0) {
+      console.log('Cache empty, falling back to live API');
+      const apiData = await fetchAPI('/addresses?page=1&items_count=1');
+      const totalHolders = apiData.total_count || 0;
+      
+      return {
+        totalHolders,
+        source: 'live-api',
+        note: 'Cache is currently being refreshed. Data fetched from live W-Chain API.',
+        timestamp: new Date().toISOString()
+      };
+    }
+    
     return {
       totalHolders: count || 0,
       source: "wallet_leaderboard_cache table (same as Dashboard 'Total WCO Holders' widget)"
@@ -1131,7 +1145,7 @@ async function executeGetCategoryStats() {
     
     if (!holders || holders.length === 0) {
       return { 
-        error: "Category statistics are not available yet. The cache is being refreshed." 
+        error: "Category statistics are not available from cache yet. The wallet cache is currently being refreshed. Please try asking for 'total holders' instead, which uses live API data as fallback." 
       };
     }
     
