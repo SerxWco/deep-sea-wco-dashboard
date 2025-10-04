@@ -1,16 +1,72 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  id?: string;
+  feedback?: 'positive' | 'negative' | null;
 }
+
+// Generate a persistent session ID
+const getSessionId = () => {
+  let sessionId = localStorage.getItem('wchain_chat_session');
+  if (!sessionId) {
+    sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem('wchain_chat_session', sessionId);
+  }
+  return sessionId;
+};
 
 export const useWChainChat = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const sessionId = getSessionId();
+
+  // Load conversation history on mount
+  useEffect(() => {
+    loadConversationHistory();
+  }, []);
+
+  const loadConversationHistory = async () => {
+    try {
+      // Find existing conversation for this session
+      const { data: convData } = await supabase
+        .from('chat_conversations')
+        .select('id')
+        .eq('session_id', sessionId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (convData) {
+        setConversationId(convData.id);
+        
+        // Load messages
+        const { data: messagesData } = await supabase
+          .from('chat_messages')
+          .select('id, role, content, timestamp, feedback')
+          .eq('conversation_id', convData.id)
+          .order('timestamp', { ascending: true });
+
+        if (messagesData && messagesData.length > 0) {
+          setMessages(messagesData.map(m => ({
+            id: m.id,
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+            timestamp: new Date(m.timestamp),
+            feedback: m.feedback as 'positive' | 'negative' | null
+          })));
+          console.log('📚 Loaded conversation history:', messagesData.length, 'messages');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load conversation history:', err);
+    }
+  };
 
   const sendMessage = async (content: string) => {
     if (!content.trim()) return;
@@ -30,15 +86,19 @@ export const useWChainChat = () => {
       // Call edge function
       const { data, error: functionError } = await supabase.functions.invoke('chat-wchain', {
         body: {
-          messages: [...messages, userMessage].map(m => ({
-            role: m.role,
-            content: m.content
-          }))
+          messages: [{ role: 'user', content }],
+          conversationId,
+          sessionId
         }
       });
 
       if (functionError) {
         throw functionError;
+      }
+
+      // Update conversation ID if returned
+      if (data.conversationId && !conversationId) {
+        setConversationId(data.conversationId);
       }
 
       // Add assistant response
@@ -57,9 +117,47 @@ export const useWChainChat = () => {
     }
   };
 
+  const setFeedback = async (messageIndex: number, feedback: 'positive' | 'negative') => {
+    try {
+      // Update local state
+      setMessages(prev => prev.map((msg, idx) => 
+        idx === messageIndex ? { ...msg, feedback } : msg
+      ));
+
+      // Update database if we have a conversation ID
+      if (conversationId) {
+        const message = messages[messageIndex];
+        
+        // Find the message in the database
+        const { data: dbMessages } = await supabase
+          .from('chat_messages')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .eq('content', message.content)
+          .eq('role', message.role)
+          .order('timestamp', { ascending: true });
+
+        if (dbMessages && dbMessages.length > 0) {
+          await supabase
+            .from('chat_messages')
+            .update({ feedback })
+            .eq('id', dbMessages[0].id);
+          
+          console.log('👍 Feedback saved:', feedback);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to save feedback:', err);
+    }
+  };
+
   const clearMessages = () => {
     setMessages([]);
+    setConversationId(null);
     setError(null);
+    
+    // Clear session and start fresh
+    localStorage.removeItem('wchain_chat_session');
   };
 
   return {
@@ -67,6 +165,7 @@ export const useWChainChat = () => {
     loading,
     error,
     sendMessage,
+    setFeedback,
     clearMessages
   };
 };

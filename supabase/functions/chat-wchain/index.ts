@@ -530,6 +530,14 @@ const tools = [
         }
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getWSwapPools",
+      description: "Get all liquidity pools from W-Swap DEX including pool addresses, token pairs, reserves, and liquidity information",
+      parameters: { type: "object", properties: {} }
+    }
   }
 ];
 
@@ -1756,10 +1764,43 @@ async function executeTool(toolName: string, args: any) {
     getTotalHoldersFromCache: executeGetTotalHoldersFromCache,
     getCategoryStats: executeGetCategoryStats,
     getWcoVolume: executeGetWcoVolume,
-    getMostActiveWallet: executeGetMostActiveWallet
+    getMostActiveWallet: executeGetMostActiveWallet,
+    getWSwapPools: executeGetWSwapPools
   };
 
   return executors[toolName] ? await executors[toolName](args) : { error: `Unknown tool: ${toolName}` };
+}
+
+// W-Swap Pools executor
+async function executeGetWSwapPools() {
+  try {
+    console.log('🏊 Fetching W-Swap pools...');
+    const response = await fetch('https://wave.w-chain.com/api/pools');
+    
+    if (!response.ok) {
+      throw new Error(`W-Swap API error: ${response.status}`);
+    }
+    
+    const pools = await response.json();
+    console.log(`✅ Retrieved ${pools.length} W-Swap pools`);
+    
+    return {
+      pools: pools.map((pool: any) => ({
+        address: pool.address,
+        token0: pool.token0,
+        token1: pool.token1,
+        reserve0: pool.reserve0,
+        reserve1: pool.reserve1,
+        totalSupply: pool.totalSupply,
+        name: pool.name || `${pool.token0?.symbol}/${pool.token1?.symbol}`,
+      })),
+      totalPools: pools.length,
+      source: 'w-swap-api'
+    };
+  } catch (error) {
+    console.error('❌ W-Swap pools fetch failed:', error);
+    return { error: `Failed to fetch W-Swap pools: ${error.message}` };
+  }
 }
 
 serve(async (req) => {
@@ -1768,8 +1809,57 @@ serve(async (req) => {
   }
 
   try {
-    const { messages } = await req.json();
-    console.log('Received messages:', messages.length);
+    const { messages, conversationId, sessionId } = await req.json();
+    console.log('Received messages:', messages.length, 'conversationId:', conversationId, 'sessionId:', sessionId);
+    
+    // Handle conversation memory
+    let finalConversationId = conversationId;
+    let conversationHistory: any[] = [];
+    
+    if (sessionId) {
+      // Try to load existing conversation for this session
+      if (!conversationId) {
+        // Look for existing conversation
+        const { data: existingConv } = await supabase
+          .from('chat_conversations')
+          .select('id')
+          .eq('session_id', sessionId)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (existingConv) {
+          finalConversationId = existingConv.id;
+          console.log('📖 Found existing conversation:', finalConversationId);
+        } else {
+          // Create new conversation
+          const { data: newConv, error: convError } = await supabase
+            .from('chat_conversations')
+            .insert({ session_id: sessionId })
+            .select('id')
+            .single();
+          
+          if (!convError && newConv) {
+            finalConversationId = newConv.id;
+            console.log('✨ Created new conversation:', finalConversationId);
+          }
+        }
+      }
+      
+      // Load conversation history if we have a conversation ID
+      if (finalConversationId) {
+        const { data: historyData } = await supabase
+          .from('chat_messages')
+          .select('role, content, tool_calls, tool_results')
+          .eq('conversation_id', finalConversationId)
+          .order('timestamp', { ascending: true });
+        
+        if (historyData && historyData.length > 0) {
+          conversationHistory = historyData;
+          console.log(`📚 Loaded ${conversationHistory.length} messages from history`);
+        }
+      }
+    }
 
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY not configured');
@@ -2110,13 +2200,83 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
       const finalData = await finalResponse.json();
       const finalMessage = finalData.choices[0].message.content;
       
-      return new Response(JSON.stringify({ message: finalMessage }), {
+      // Store messages in database if we have a conversation ID
+      if (finalConversationId) {
+        const userMessage = messages[messages.length - 1];
+        
+        // Store user message
+        await supabase.from('chat_messages').insert({
+          conversation_id: finalConversationId,
+          role: 'user',
+          content: userMessage.content,
+          tool_calls: null,
+          tool_results: null
+        });
+        
+        // Store assistant message with tool calls
+        await supabase.from('chat_messages').insert({
+          conversation_id: finalConversationId,
+          role: 'assistant',
+          content: finalMessage,
+          tool_calls: choice.message.tool_calls,
+          tool_results: toolResults
+        });
+        
+        // Update conversation timestamp
+        await supabase
+          .from('chat_conversations')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', finalConversationId);
+        
+        console.log('💾 Saved conversation messages');
+      }
+      
+      return new Response(JSON.stringify({ 
+        message: finalMessage,
+        conversationId: finalConversationId 
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     
     // No tools needed, return direct response
-    return new Response(JSON.stringify({ message: choice.message.content }), {
+    const directMessage = choice.message.content;
+    
+    // Store messages in database if we have a conversation ID
+    if (finalConversationId) {
+      const userMessage = messages[messages.length - 1];
+      
+      // Store user message
+      await supabase.from('chat_messages').insert({
+        conversation_id: finalConversationId,
+        role: 'user',
+        content: userMessage.content,
+        tool_calls: null,
+        tool_results: null
+      });
+      
+      // Store assistant message
+      await supabase.from('chat_messages').insert({
+        conversation_id: finalConversationId,
+        role: 'assistant',
+        content: directMessage,
+        tool_calls: null,
+        tool_results: null
+      });
+      
+      // Update conversation timestamp
+      await supabase
+        .from('chat_conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', finalConversationId);
+      
+      console.log('💾 Saved conversation messages');
+    }
+    
+    return new Response(JSON.stringify({ 
+      message: directMessage,
+      conversationId: finalConversationId 
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

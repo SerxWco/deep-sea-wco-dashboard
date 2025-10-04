@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Trash2, Loader2 } from 'lucide-react';
+import { Send, Trash2, Loader2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +19,7 @@ const quickQuestions = [
 
 export const WChainChatbot = () => {
   const [input, setInput] = useState('');
-  const { messages, loading, error, sendMessage, clearMessages } = useWChainChat();
+  const { messages, loading, error, sendMessage, setFeedback, clearMessages } = useWChainChat();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -44,6 +44,11 @@ export const WChainChatbot = () => {
 
   const handleQuickQuestion = async (question: string) => {
     await sendMessage(question);
+  };
+
+  const handleFeedback = async (messageIndex: number, feedback: 'positive' | 'negative') => {
+    await setFeedback(messageIndex, feedback);
+    toast.success(feedback === 'positive' ? '👍 Thanks for the feedback!' : '👎 Feedback noted, I\'ll try to improve!');
   };
 
   return (
@@ -112,17 +117,39 @@ export const WChainChatbot = () => {
                   {message.role === 'assistant' && (
                     <BubblesAvatar size="sm" state="idle" className="mt-1 flex-shrink-0" />
                   )}
-                  <div
-                    className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                      message.role === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-gradient-to-br from-muted via-muted to-primary/10 text-foreground border border-primary/20'
-                    }`}
-                  >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                    <span className="text-xs opacity-70 mt-1 block">
-                      {message.timestamp.toLocaleTimeString()}
-                    </span>
+                  <div className="flex flex-col gap-1">
+                    <div
+                      className={`rounded-lg px-4 py-2 ${
+                        message.role === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-gradient-to-br from-muted via-muted to-primary/10 text-foreground border border-primary/20'
+                      }`}
+                    >
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      <span className="text-xs opacity-70 mt-1 block">
+                        {message.timestamp.toLocaleTimeString()}
+                      </span>
+                    </div>
+                    {message.role === 'assistant' && (
+                      <div className="flex gap-1 ml-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`h-6 w-6 p-0 ${message.feedback === 'positive' ? 'text-green-500' : 'text-muted-foreground hover:text-green-500'}`}
+                          onClick={() => handleFeedback(idx, 'positive')}
+                        >
+                          <ThumbsUp className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`h-6 w-6 p-0 ${message.feedback === 'negative' ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'}`}
+                          onClick={() => handleFeedback(idx, 'negative')}
+                        >
+                          <ThumbsDown className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
