@@ -1,19 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Trash2, Loader2, MessageSquare } from 'lucide-react';
+import { Send, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWChainChat } from '@/hooks/useWChainChat';
 import { toast } from 'sonner';
+import { BubblesAvatar } from './BubblesAvatar';
 
 const quickQuestions = [
-  "How many WCO holders are there?",
-  "Show me the top 10 Krakens",
-  "What tokens exist on W-Chain?",
-  "Recent large transactions",
-  "Show holder distribution",
-  "What is the current network status?",
+  "🌊 How many WCO holders are there?",
+  "🦑 Show me the top 10 Krakens",
+  "🐚 What tokens exist on W-Chain?",
+  "💎 Recent large transactions",
+  "🫧 Show holder distribution",
+  "⚓ What is the current network status?",
 ];
 
 export const WChainChatbot = () => {
@@ -47,11 +48,18 @@ export const WChainChatbot = () => {
 
   return (
     <Card className="w-full h-[600px] flex flex-col">
-      <CardHeader className="border-b">
+      <CardHeader className="border-b bg-gradient-to-r from-card via-card to-primary/5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-primary" />
-            <CardTitle>W-Chain AI Assistant</CardTitle>
+          <div className="flex items-center gap-3">
+            <BubblesAvatar size="sm" state={loading ? "thinking" : "idle"} />
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                Bubbles – WCO Ocean AI 🫧
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Your friendly guide through the ocean of WCO data 🌊
+              </p>
+            </div>
           </div>
           {messages.length > 0 && (
             <Button
@@ -69,12 +77,14 @@ export const WChainChatbot = () => {
       <CardContent className="flex-1 flex flex-col p-0">
         <ScrollArea className="flex-1 p-4" ref={scrollRef}>
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
-              <MessageSquare className="w-12 h-12 text-muted-foreground" />
+            <div className="h-full flex flex-col items-center justify-center text-center space-y-6 px-4">
+              <BubblesAvatar size="lg" state="idle" />
               <div>
-                <h3 className="font-semibold text-lg mb-2">Ask me anything about W-Chain</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  I can help with WCO holders, transactions, blocks, tokens, NFTs, smart contracts, and network analytics
+                <h3 className="font-semibold text-xl mb-2">
+                  Hi! I'm Bubbles 🫧
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  I can help you explore WCO holders, transactions, tokens, and more. Ask me anything about W-Chain! 🌊
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
@@ -85,7 +95,7 @@ export const WChainChatbot = () => {
                     size="sm"
                     onClick={() => handleQuickQuestion(question)}
                     disabled={loading}
-                    className="text-xs"
+                    className="text-xs hover:bg-primary/10 hover:border-primary/30 transition-all"
                   >
                     {question}
                   </Button>
@@ -97,13 +107,16 @@ export const WChainChatbot = () => {
               {messages.map((message, idx) => (
                 <div
                   key={idx}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex gap-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
+                  {message.role === 'assistant' && (
+                    <BubblesAvatar size="sm" state="idle" className="mt-1 flex-shrink-0" />
+                  )}
                   <div
                     className={`max-w-[80%] rounded-lg px-4 py-2 ${
                       message.role === 'user'
                         ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-foreground'
+                        : 'bg-gradient-to-br from-muted via-muted to-primary/10 text-foreground border border-primary/20'
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
@@ -114,9 +127,10 @@ export const WChainChatbot = () => {
                 </div>
               ))}
               {loading && (
-                <div className="flex justify-start">
-                  <div className="bg-muted rounded-lg px-4 py-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                <div className="flex gap-2 justify-start">
+                  <BubblesAvatar size="sm" state="thinking" className="mt-1 flex-shrink-0" />
+                  <div className="bg-gradient-to-br from-muted via-muted to-primary/10 rounded-lg px-4 py-3 border border-primary/20">
+                    <p className="text-sm text-muted-foreground">Bubbles is diving deep... 💧</p>
                   </div>
                 </div>
               )}
