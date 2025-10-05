@@ -2096,8 +2096,44 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
+    // ====================================
+    // 🧠 LOAD DYNAMIC KNOWLEDGE BASE
+    // ====================================
+    let dynamicKnowledge = '';
+    try {
+      const { data: knowledgeEntries } = await supabase
+        .from('knowledge_base')
+        .select('category, title, content')
+        .eq('is_active', true)
+        .order('priority', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (knowledgeEntries && knowledgeEntries.length > 0) {
+        dynamicKnowledge = '\n\n## 📚 DYNAMIC KNOWLEDGE BASE (PRIORITY INFO)\n\n';
+        dynamicKnowledge += 'The following information has been added by administrators and should be prioritized in your responses:\n\n';
+        
+        const categorized: Record<string, typeof knowledgeEntries> = {};
+        knowledgeEntries.forEach(entry => {
+          if (!categorized[entry.category]) categorized[entry.category] = [];
+          categorized[entry.category].push(entry);
+        });
+
+        Object.entries(categorized).forEach(([category, entries]) => {
+          dynamicKnowledge += `### ${category}\n`;
+          entries.forEach(entry => {
+            dynamicKnowledge += `\n**${entry.title}**\n${entry.content}\n`;
+          });
+          dynamicKnowledge += '\n';
+        });
+        
+        console.log(`📚 Loaded ${knowledgeEntries.length} knowledge entries`);
+      }
+    } catch (err) {
+      console.error('Failed to load knowledge base:', err);
+    }
+
     const currentDate = new Date().toISOString().split('T')[0];
-    const systemPrompt = `Current date: ${currentDate}
+    const systemPrompt = `Current date: ${currentDate}${dynamicKnowledge}
 
 You are Bubbles 🫧, a friendly and playful W-Chain blockchain explorer AI assistant! You're like a cheerful guide swimming through the ocean of WCO data. 🌊
 

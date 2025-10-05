@@ -12,6 +12,7 @@ import Tokens from "./pages/Tokens";
 import Wave from "./pages/Wave";
 import WcoInfo from "./pages/WcoInfo";
 import KrakenWatchlistPage from "./pages/KrakenWatchlist";
+import AdminKnowledge from "./pages/AdminKnowledge";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -73,6 +74,11 @@ const App = () => (
                 <h1 className="text-2xl font-bold text-foreground mb-4">Support Project</h1>
                 <p className="text-muted-foreground">Coming soon...</p>
               </div>
+            </DashboardLayout>
+          } />
+          <Route path="/admin/knowledge" element={
+            <DashboardLayout>
+              <AdminKnowledge />
             </DashboardLayout>
           } />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
