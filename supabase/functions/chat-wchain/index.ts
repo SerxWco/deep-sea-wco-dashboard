@@ -38,71 +38,76 @@ async function fetchAPI(endpoint: string, cacheTTL = 0) {
   return data;
 }
 
-// Special wallet definitions (matching Dashboard logic)
+// Special wallet definitions (aligned with Dashboard logic)
 const FLAGSHIP_WALLETS: Record<string, string> = {
-  "0xfAc510D5dB8cadfF323D4b979D898dc38F3FB6dF": "Validators Staking",
-  "0x2ca9472ADd8a02c74D50FC3Ea444548502E35BDb": "Marketing & Community Vesting",
-  "0x94DbFF05e1C129869772E1Fb291901083CdAdef1": "W-Chain Ecosystem Vesting",
-  "0xa237FeAFa2BAc4096867aF6229a2370B7A661A5F": "Incentives Vesting",
-  "0x80eaBD19b84b4f5f042103e957964297589C657D": "Enterprises & Partnerships Vesting",
-  "0x57Ab15Ca8Bd528D509DbC81d11E9BecA44f3445f": "Development Fund Vesting",
-  "0x5555555555555555555555555555555555555555": "Team 1",
-  "0x1111111111111111111111111111111111111111": "Marketing Fund"
+  // Core/vesting/treasury addresses
+  "0xfAc510D5dB8cadfF323D4b979D898dc38F3FB6dF": "Validation Nodes",
+  "0x511A6355407Bb78f26172DB35100A87B9bE20Fc3": "Liquidity Provision",
+  "0x2ca9472ADd8a02c74D50FC3Ea444548502E35BDb": "Marketing & Community",
+  "0xa306799eE31c7f89D3ff82D3397972933d57d679": "Premium Account Features",
+  "0x94DbFF05e1C129869772E1Fb291901083CdAdef1": "W Chain Ecosystem",
+  "0x58213DD561d12a0Ea7b538B1b26DE34dACe1D0F0": "Developer Incentives",
+  "0x13768af351B4627dcE8De6A67e59e4b27B4Cbf5D": "Exchange Listings",
+  "0xa237FeAFa2BAc4096867aF6229a2370B7A661A5F": "Incentives",
+  "0xFC06231E2e448B778680202BEA8427884c011341": "Institutional Sales",
+  "0x80eaBD19b84b4f5f042103e957964297589C657D": "Enterprises & Partnerships",
+  "0x57Ab15Ca8Bd528D509DbC81d11E9BecA44f3445f": "Development Fund",
+  "0xba9Be06936C806AEfAd981Ae96fa4D599B78aD24": "WTK Conversion / Total Supply",
+  "0x67F2696c125D8D1307a5aE17348A440718229D03": "Treasury Wallet",
+  "0x81d29c0DcD64fAC05C4A394D455cbD79D210C200": "Buybacks"
 };
 
 const EXCHANGE_WALLETS: Record<string, string> = {
-  "0xE8888888888888888888888888888888888888888": "MEXC Exchange",
-  "0xB9999999999999999999999999999999999999999": "BitMart Exchange",
-  "0xC0000000000000000000000000000000000000000": "Bitrue Exchange"
+  "0x2802e182d5a15df915fd0363d8f1adfd2049f9ee": "MEXC Exchange",
+  "0x430d2ada8140378989d20eae6d48ea05bbce2977": "BitMart Exchange",
+  "0x6cc8dcbca746a6e4fdefb98e1d0df903b107fd21": "Bitrue Exchange"
 };
 
 const WRAPPED_WCO = [
-  "0xD1111111111111111111111111111111111111111",
-  "0xD2222222222222222222222222222222222222222"
+  // Wrapped WCO contract
+  "0xedb8008031141024d50ca2839a607b2f82c1c045"
 ];
 
 // Helper function to categorize wallets (matching Dashboard logic)
-function categorizeWallet(balance: number, address: string): { 
-  category: string; 
-  emoji: string; 
+function categorizeWallet(balance: number, address: string): {
+  category: string;
+  emoji: string;
   label?: string;
   isSpecial: boolean;
 } {
-  const lowerAddress = address.toLowerCase();
-  
+  const lowerAddress = (address || '').toLowerCase();
+
   // Check flagship wallets
   const flagshipLabel = Object.entries(FLAGSHIP_WALLETS).find(
     ([addr]) => addr.toLowerCase() === lowerAddress
   )?.[1];
   if (flagshipLabel) {
-    return { category: "🏛️ Flagship", emoji: "🏛️", label: flagshipLabel, isSpecial: true };
+    return { category: "Flagship", emoji: "🚩", label: flagshipLabel, isSpecial: true };
   }
-  
+
   // Check exchange wallets
   const exchangeLabel = Object.entries(EXCHANGE_WALLETS).find(
     ([addr]) => addr.toLowerCase() === lowerAddress
   )?.[1];
   if (exchangeLabel) {
-    return { category: "🏦 Exchange", emoji: "🏦", label: exchangeLabel, isSpecial: true };
+    return { category: "Harbor", emoji: "⚓", label: exchangeLabel, isSpecial: true };
   }
-  
+
   // Check wrapped WCO
   if (WRAPPED_WCO.some(addr => addr.toLowerCase() === lowerAddress)) {
-    return { category: "📦 Wrapped WCO", emoji: "📦", label: "Wrapped WCO Contract", isSpecial: true };
+    return { category: "Bridge/Wrapped", emoji: "🌉", label: "Wrapped WCO Contract", isSpecial: true };
   }
-  
-  // Regular balance-based categorization
-  if (balance >= 100000000) return { category: "🐋 Mega Whale", emoji: "🐋", isSpecial: false };
-  if (balance >= 50000000) return { category: "🦈 Whale", emoji: "🦈", isSpecial: false };
-  if (balance >= 10000000) return { category: "🐬 Dolphin", emoji: "🐬", isSpecial: false };
-  if (balance >= 5000000) return { category: "🦭 Seal", emoji: "🦭", isSpecial: false };
-  if (balance >= 1000000) return { category: "🐢 Turtle", emoji: "🐢", isSpecial: false };
-  if (balance >= 500000) return { category: "🦑 Squid", emoji: "🦑", isSpecial: false };
-  if (balance >= 100000) return { category: "🦀 Crab", emoji: "🦀", isSpecial: false };
-  if (balance >= 50000) return { category: "🐙 Octopus", emoji: "🐙", isSpecial: false };
-  if (balance >= 10000) return { category: "🐡 Pufferfish", emoji: "🐡", isSpecial: false };
-  if (balance >= 1000) return { category: "🐠 Fish", emoji: "🐠", isSpecial: false };
-  return { category: "🦐 Shrimp", emoji: "🦐", isSpecial: false };
+
+  // Balance-based categorization (Ocean Creatures tiers)
+  if (balance >= 5_000_000) return { category: "Kraken", emoji: "🦑", isSpecial: false };
+  if (balance >= 1_000_001) return { category: "Whale", emoji: "🐋", isSpecial: false };
+  if (balance >= 500_001) return { category: "Shark", emoji: "🦈", isSpecial: false };
+  if (balance >= 100_001) return { category: "Dolphin", emoji: "🐬", isSpecial: false };
+  if (balance >= 50_001) return { category: "Fish", emoji: "🐟", isSpecial: false };
+  if (balance >= 10_001) return { category: "Octopus", emoji: "🐙", isSpecial: false };
+  if (balance >= 1_001) return { category: "Crab", emoji: "🦀", isSpecial: false };
+  if (balance >= 1) return { category: "Shrimp", emoji: "🦐", isSpecial: false };
+  return { category: "Plankton", emoji: "🦠", isSpecial: false };
 }
 
 // GraphQL query helper for fetching network stats (matching Dashboard logic)
@@ -110,18 +115,18 @@ async function queryGraphQL(limit: number = 5000) {
   try {
     const query = `
       query NetworkStats($limit: Int!) {
-        addresses(
-          order_by: { coin_balance: desc }
-          limit: $limit
-        ) {
-          hash
-          coin_balance
-          transactions_count
+        addresses(first: $limit, orderBy: COIN_BALANCE_DESC) {
+          items {
+            hash
+            coinBalance
+            transactionsCount
+          }
+          totalCount
         }
       }
     `;
-    
-    const response = await fetch('https://explorer.w-chain.net/api/v2/graphql', {
+
+    const response = await fetch('https://scan.w-chain.com/api/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, variables: { limit } })
@@ -133,8 +138,8 @@ async function queryGraphQL(limit: number = 5000) {
     if (data.errors) {
       throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
     }
-    
-    return data.data?.addresses || [];
+    const items = data.data?.addresses?.items || [];
+    return items;
   } catch (error) {
     console.error('GraphQL query failed:', error);
     return null; // Return null to trigger fallback to REST API
@@ -700,7 +705,7 @@ async function executeGetAddressInfo(args: any) {
     const result: any = {
       address: addrData.hash,
       balance: balance,
-      category: categorizeWallet(balance),
+      category: categorizeWallet(balance, args.address),
       transactionCount: addrData.tx_count,
       isContract: addrData.is_contract
     };
@@ -882,7 +887,7 @@ async function executeGetHolderDistribution() {
 
       while (hasMore && page <= 10) {
         try {
-          const url = `https://explorer.w-chain.com/api/v2/addresses?page=${page}&filter=validated&sort=coin_balance&order=desc`;
+          const url = `https://scan.w-chain.com/api/v2/addresses?page=${page}&filter=validated&sort=coin_balance&order=desc`;
           const response = await fetch(url);
           
           if (!response.ok) break;
@@ -1404,8 +1409,7 @@ async function executeGetTotalHoldersFromCache() {
     console.log('⚠️ Cache empty/error, trying GraphQL (fast path)...');
     
     // STEP 2: Try GraphQL API (same as Dashboard fast path)
-    const graphqlAddresses = await queryGraphQL(5000);
-    
+    const graphqlAddresses = await queryGraphQL(10000);
     if (graphqlAddresses && graphqlAddresses.length > 0) {
       console.log(`✅ GraphQL success: ${graphqlAddresses.length} wallets`);
       return {
@@ -2120,6 +2124,83 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
 - Always provide current/real-time data when available
 - Holder statistics are sourced from the same cache as the Daily Report and Ocean Creatures page for data consistency
 - Use getSupplyInfo tool for tokenomics queries (circulating supply, locked amounts, vesting breakdowns, burned tokens)`;
+
+    // Quick intent router for common holder queries (answer directly without LLM when possible)
+    const latestUserMessage = Array.isArray(messages) && messages.length > 0 ? (messages[messages.length - 1]?.content || '') : '';
+    const msgLower = (latestUserMessage || '').toLowerCase();
+
+    async function respondAndStore(messageText: string) {
+      // Store messages in database if we have a conversation ID
+      if (finalConversationId) {
+        const userMessage = messages[messages.length - 1];
+        await supabase.from('chat_messages').insert({
+          conversation_id: finalConversationId,
+          role: 'user',
+          content: userMessage.content,
+          tool_calls: null,
+          tool_results: null
+        });
+        await supabase.from('chat_messages').insert({
+          conversation_id: finalConversationId,
+          role: 'assistant',
+          content: messageText,
+          tool_calls: null,
+          tool_results: null
+        });
+        await supabase
+          .from('chat_conversations')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', finalConversationId);
+      }
+      return new Response(JSON.stringify({ message: messageText, conversationId: finalConversationId }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    function formatAddress(addr: string): string {
+      if (!addr || addr.length < 10) return addr;
+      return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+    }
+
+    function formatNumber(n: number): string {
+      try {
+        return Number(n).toLocaleString('en-US');
+      } catch {
+        return `${n}`;
+      }
+    }
+
+    // Detect intents
+    const isHoldersCount = /(how\s*many\s*(wco)?\s*holders?|total\s*holders|holders?\s*count)/i.test(msgLower);
+    const topKrakenMatch = msgLower.match(/top\s*(\d+)?\s*krakens?/i) || (msgLower.includes('🦑') && msgLower.includes('top') ? ['top 10', '10'] as any : null);
+    const isDistribution = /(holder\s*distribution|distribution\s*of\s*holders|distribution\s*holders)/i.test(msgLower);
+
+    if (isHoldersCount) {
+      const res = await executeGetTotalHoldersFromCache();
+      if ((res as any)?.totalHolders != null) {
+        const msg = `Diving in! 💧\n\n**Total WCO holders:** ${formatNumber((res as any).totalHolders)}\n\nSource: ${(res as any).source?.replace(/-/g, ' ')}. 🫧`;
+        return await respondAndStore(msg);
+      }
+    }
+
+    if (topKrakenMatch) {
+      const limit = Math.max(1, Math.min(50, parseInt((topKrakenMatch[1] || '10'), 10) || 10));
+      const res = await executeGetTopHolders({ limit, category: 'Kraken' });
+      if ((res as any)?.holders?.length > 0) {
+        const rows = (res as any).holders.map((h: any, i: number) => `${i + 1}. ${formatAddress(h.address)} — ${formatNumber(h.balance)} WCO`);
+        const msg = `Here are the top ${limit} Krakens 🦑:\n\n${rows.join('\n')}\n\nTotal holders scanned: ${formatNumber((res as any).total)}. Source: ${(res as any).source?.replace(/-/g, ' ')}.`;
+        return await respondAndStore(msg);
+      }
+    }
+
+    if (isDistribution) {
+      const res = await executeGetHolderDistribution();
+      if ((res as any)?.distribution?.length > 0) {
+        const rows = (res as any).distribution.map((d: any) => `- ${d.category}: ${formatNumber(d.count)} (${d.percentage}%)`);
+        const msg = `🫧 Holder distribution across Ocean tiers:\n\n${rows.join('\n')}\n\nTotal holders: ${formatNumber((res as any).totalHolders)}. Source: ${(res as any).source?.replace(/-/g, ' ')}.`;
+        return await respondAndStore(msg);
+      }
+    }
 
     // First AI call with tools
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
