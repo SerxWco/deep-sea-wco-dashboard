@@ -8,14 +8,6 @@ import { useWChainChat } from '@/hooks/useWChainChat';
 import { toast } from 'sonner';
 import { BubblesAvatar } from './BubblesAvatar';
 
-const quickQuestions = [
-  "🌊 How many WCO holders are there?",
-  "🦑 Show me the top 10 Krakens",
-  "🐚 What tokens exist on W-Chain?",
-  "💎 Recent large transactions",
-  "🫧 Show holder distribution",
-  "⚓ What is the current network status?",
-];
 
 export const WChainChatbot = () => {
   const [input, setInput] = useState('');
@@ -42,9 +34,6 @@ export const WChainChatbot = () => {
     setInput('');
   };
 
-  const handleQuickQuestion = async (question: string) => {
-    await sendMessage(question);
-  };
 
   const handleFeedback = async (messageIndex: number, feedback: 'positive' | 'negative') => {
     await setFeedback(messageIndex, feedback);
@@ -91,20 +80,6 @@ export const WChainChatbot = () => {
                 <p className="text-sm text-muted-foreground max-w-md">
                   I can help you explore WCO holders, transactions, tokens, and more. Ask me anything about W-Chain! 🌊
                 </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
-                {quickQuestions.map((question, idx) => (
-                  <Button
-                    key={idx}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleQuickQuestion(question)}
-                    disabled={loading}
-                    className="text-xs hover:bg-primary/10 hover:border-primary/30 transition-all"
-                  >
-                    {question}
-                  </Button>
-                ))}
               </div>
             </div>
           ) : (
