@@ -586,7 +586,7 @@ async function executeSearchBlockchain(args: any) {
     const data = await fetchAPI(`/search?q=${encodeURIComponent(args.query)}`);
     return { results: data.items || [], query: args.query };
   } catch (error) {
-    return { error: `Search failed: ${error.message}` };
+    return { error: `Search failed: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -621,7 +621,7 @@ async function executeGetNetworkStats() {
       timestamp: new Date().toISOString()
     };
   } catch (error) {
-    return { error: `Failed to fetch stats: ${error.message}` };
+    return { error: `Failed to fetch stats: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -638,7 +638,7 @@ async function executeGetBlockInfo(args: any) {
       size: data.size
     };
   } catch (error) {
-    return { error: `Block not found: ${error.message}` };
+    return { error: `Block not found: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -656,7 +656,7 @@ async function executeGetRecentBlocks(args: any) {
       }))
     };
   } catch (error) {
-    return { error: `Failed to fetch blocks: ${error.message}` };
+    return { error: `Failed to fetch blocks: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -692,7 +692,7 @@ async function executeGetTransactionDetails(args: any) {
 
     return result;
   } catch (error) {
-    return { error: `Transaction not found: ${error.message}` };
+    return { error: `Transaction not found: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -727,7 +727,7 @@ async function executeGetRecentTransactions(args: any) {
       filtered: args.hours ? `Last ${args.hours} hours` : 'All recent'
     };
   } catch (error) {
-    return { error: `Failed to fetch transactions: ${error.message}` };
+    return { error: `Failed to fetch transactions: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -765,7 +765,7 @@ async function executeGetAddressInfo(args: any) {
 
     return result;
   } catch (error) {
-    return { error: `Address not found: ${error.message}` };
+    return { error: `Address not found: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -841,7 +841,7 @@ async function executeGetTopHolders(args: any) {
     
   } catch (error) {
     console.error('❌ Get top holders failed:', error);
-    return { error: `Failed to fetch holders: ${error.message}` };
+    return { error: `Failed to fetch holders: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -878,7 +878,7 @@ async function executeGetHolderDistribution() {
       source: 'cache'
     };
   } catch (error) {
-    return { error: `Failed to get holder distribution: ${error.message}` };
+    return { error: `Failed to get holder distribution: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -901,7 +901,7 @@ async function executeGetTokensList(args: any) {
       }))
     };
   } catch (error) {
-    return { error: `Failed to fetch tokens: ${error.message}` };
+    return { error: `Failed to fetch tokens: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -920,7 +920,7 @@ async function executeGetTokenInfo(args: any) {
       transfers: counters.transfers_count
     };
   } catch (error) {
-    return { error: `Token not found: ${error.message}` };
+    return { error: `Token not found: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -934,7 +934,7 @@ async function executeGetTokenHolders(args: any) {
       }))
     };
   } catch (error) {
-    return { error: `Failed to fetch token holders: ${error.message}` };
+    return { error: `Failed to fetch token holders: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -950,7 +950,7 @@ async function executeGetSmartContracts(args: any) {
       }))
     };
   } catch (error) {
-    return { error: `Failed to fetch contracts: ${error.message}` };
+    return { error: `Failed to fetch contracts: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -959,7 +959,7 @@ async function executeGetTransactionCharts() {
     const data = await fetchAPI('/stats/charts/transactions', 300000);
     return { chartData: data.chart_data || [] };
   } catch (error) {
-    return { error: `Failed to fetch charts: ${error.message}` };
+    return { error: `Failed to fetch charts: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -974,7 +974,7 @@ async function executeGetDailyMetrics(args: any) {
     if (error) throw error;
     return { metrics: data || [], period: `${args.days || 7} days` };
   } catch (error) {
-    return { error: `Failed to fetch daily metrics: ${error.message}` };
+    return { error: `Failed to fetch daily metrics: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1005,7 +1005,7 @@ async function executeGetSupplyInfo() {
       methodology: data.methodology.formula
     };
   } catch (error) {
-    return { error: `Failed to fetch supply info: ${error.message}` };
+    return { error: `Failed to fetch supply info: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1026,7 +1026,7 @@ async function executeGetTokenPrice(args: any) {
       cacheTTL: '60 seconds'
     };
   } catch (error) {
-    return { error: `Failed to fetch ${args.symbol} price: ${error.message}` };
+    return { error: `Failed to fetch ${args.symbol} price: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1073,7 +1073,7 @@ async function executeGetTokenTransfers(args: any) {
     };
   } catch (error) {
     console.error('Token transfers error:', error);
-    return { error: `Failed to get token transfers: ${error.message}` };
+    return { error: `Failed to get token transfers: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1121,7 +1121,7 @@ async function executeGetContractInfo(args: any) {
     };
   } catch (error) {
     console.error('Contract info error:', error);
-    return { error: `Failed to get contract info: ${error.message}` };
+    return { error: `Failed to get contract info: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1172,7 +1172,7 @@ async function executeGetContractLogs(args: any) {
     };
   } catch (error) {
     console.error('Contract logs error:', error);
-    return { error: `Failed to get contract logs: ${error.message}` };
+    return { error: `Failed to get contract logs: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1221,7 +1221,7 @@ async function executeGetMultipleBalances(args: any) {
     return { error: "Failed to fetch balances or invalid addresses" };
   } catch (error) {
     console.error('Multiple balances error:', error);
-    return { error: `Failed to get multiple balances: ${error.message}` };
+    return { error: `Failed to get multiple balances: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1251,7 +1251,7 @@ async function executeGetBlockReward(args: any) {
     return { error: "Block reward information not available" };
   } catch (error) {
     console.error('Block reward error:', error);
-    return { error: `Failed to get block reward: ${error.message}` };
+    return { error: `Failed to get block reward: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1281,7 +1281,7 @@ async function executeGetTransactionStatus(args: any) {
     return { error: "Transaction status not available or transaction not found" };
   } catch (error) {
     console.error('Transaction status error:', error);
-    return { error: `Failed to get transaction status: ${error.message}` };
+    return { error: `Failed to get transaction status: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1309,7 +1309,7 @@ async function executeGetBlockCountdown(args: any) {
     return { error: "Block countdown information not available" };
   } catch (error) {
     console.error('Block countdown error:', error);
-    return { error: `Failed to get block countdown: ${error.message}` };
+    return { error: `Failed to get block countdown: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1402,7 +1402,7 @@ async function executeGetTotalHoldersFromCache() {
   } catch (error) {
     console.error('❌ Total holders fetch failed completely:', error);
     return { 
-      error: `Failed to get total holders: ${error.message}`,
+      error: `Failed to get total holders: ${error instanceof Error ? error.message : String(error)}`,
       note: 'All data sources (cache, GraphQL, REST API) failed'
     };
   }
@@ -1460,7 +1460,7 @@ async function executeGetCategoryStats() {
     };
   } catch (error) {
     console.error('Category stats error:', error);
-    return { error: `Failed to get category stats: ${error.message}` };
+    return { error: `Failed to get category stats: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1549,7 +1549,7 @@ async function executeGetWcoVolume(args: any) {
     
   } catch (error) {
     console.error('❌ WCO volume calculation failed:', error);
-    return { error: `Failed to calculate WCO volume: ${error.message}` };
+    return { error: `Failed to calculate WCO volume: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1658,7 +1658,7 @@ async function executeGetMostActiveWallet(args: any) {
     
   } catch (error) {
     console.error('❌ Most active wallet search failed:', error);
-    return { error: `Failed to find most active wallet: ${error.message}` };
+    return { error: `Failed to find most active wallet: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -1729,7 +1729,7 @@ async function executeGetWSwapPools() {
     };
   } catch (error) {
     console.error('❌ W-Swap pools fetch failed:', error);
-    return { error: `Failed to fetch W-Swap pools: ${error.message}` };
+    return { error: `Failed to fetch W-Swap pools: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -2135,7 +2135,6 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
     }
 
     // Build conversation context (system + history + latest turn)
-    const latestUserMessage = Array.isArray(messages) && messages.length > 0 ? (messages[messages.length - 1]?.content || '') : '';
     const historyForModel = mapHistoryToMessages(conversationHistory, MAX_HISTORY_MESSAGES);
     const modelToUse = chooseModel(latestUserMessage, false);
 
