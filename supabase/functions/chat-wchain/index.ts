@@ -535,6 +535,84 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "getWalletsByCategory",
+      description: "Get all wallets that belong to a specific Ocean Creature category (Kraken, Whale, Shark, Dolphin, Fish, Octopus, Crab, Shrimp, Plankton, Flagship, Exchange)",
+      parameters: {
+        type: "object",
+        properties: {
+          category: { 
+            type: "string", 
+            description: "The wallet category to filter by (e.g., 'Whale', 'Flagship', 'Harbor')" 
+          },
+          limit: { type: "number", default: 50, description: "Maximum number of wallets to return" }
+        },
+        required: ["category"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getWalletTier",
+      description: "Check which Ocean Creature tier/category a specific wallet belongs to, including balance and ranking information",
+      parameters: {
+        type: "object",
+        properties: {
+          address: { type: "string", description: "Wallet address to check" }
+        },
+        required: ["address"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "compareWallets",
+      description: "Compare balances and details between multiple wallets (useful for comparing team wallets, flagship wallets, or any group of addresses)",
+      parameters: {
+        type: "object",
+        properties: {
+          addresses: { 
+            type: "array", 
+            items: { type: "string" },
+            description: "Array of wallet addresses to compare (2-10 addresses)" 
+          }
+        },
+        required: ["addresses"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "searchWalletByLabel",
+      description: "Find wallets by their label/name (e.g., 'Marketing', 'Team', 'Treasury', 'MEXC'). Searches through flagship and exchange wallet labels.",
+      parameters: {
+        type: "object",
+        properties: {
+          searchTerm: { type: "string", description: "Label or name to search for" }
+        },
+        required: ["searchTerm"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getInactiveWallets",
+      description: "Find wallets that haven't had recent transaction activity. Note: This requires transaction_count data from the cache.",
+      parameters: {
+        type: "object",
+        properties: {
+          minBalance: { type: "number", default: 1000, description: "Minimum WCO balance to include" },
+          limit: { type: "number", default: 20, description: "Maximum number of results" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "getWcoVolume",
       description: "Calculate total WCO transaction volume for a specific time period. Data is sourced from daily_metrics table when available (fast, accurate) with fallback to live API aggregation.",
       parameters: {
@@ -1464,6 +1542,224 @@ async function executeGetCategoryStats() {
   }
 }
 
+// Execute get wallets by category
+async function executeGetWalletsByCategory(args: any) {
+  try {
+    const categoryFilter = args.category?.toLowerCase();
+    const limit = args.limit || 50;
+    
+    console.log(`🔍 Fetching wallets for category: ${categoryFilter}`);
+    
+    const { data: wallets, error } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('address, balance, category, emoji, label, is_flagship, is_exchange, transaction_count')
+      .ilike('category', `%${categoryFilter}%`)
+      .order('balance', { ascending: false })
+      .limit(limit);
+    
+    if (error) throw error;
+    
+    if (!wallets || wallets.length === 0) {
+      return { 
+        error: `No wallets found for category "${args.category}". Available categories: Kraken, Whale, Shark, Dolphin, Fish, Octopus, Crab, Shrimp, Plankton, Flagship, Exchange` 
+      };
+    }
+    
+    return {
+      category: args.category,
+      wallets: wallets.map(w => ({
+        address: w.address,
+        balance: Number(w.balance),
+        tier: `${w.category} ${w.emoji}`,
+        label: w.label || null,
+        transactionCount: w.transaction_count
+      })),
+      count: wallets.length,
+      source: 'wallet_leaderboard_cache'
+    };
+  } catch (error) {
+    return { error: `Failed to fetch wallets: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+// Execute get wallet tier
+async function executeGetWalletTier(args: any) {
+  try {
+    const address = args.address.toLowerCase();
+    
+    console.log(`🔍 Checking tier for wallet: ${address}`);
+    
+    const { data: wallet, error } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('address, balance, category, emoji, label, is_flagship, is_exchange, transaction_count')
+      .ilike('address', address)
+      .maybeSingle();
+    
+    if (error) throw error;
+    
+    if (!wallet) {
+      return { 
+        error: `Wallet ${args.address} not found in the leaderboard cache. It may have a very low balance or the cache is being refreshed.` 
+      };
+    }
+    
+    // Get rank
+    const { count } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('address', { count: 'exact', head: true })
+      .gt('balance', wallet.balance);
+    
+    const rank = (count || 0) + 1;
+    
+    return {
+      address: wallet.address,
+      balance: Number(wallet.balance),
+      tier: `${wallet.category} ${wallet.emoji}`,
+      label: wallet.label || null,
+      rank: rank,
+      transactionCount: wallet.transaction_count,
+      isFlhip: wallet.is_flagship,
+      isExchange: wallet.is_exchange,
+      source: 'wallet_leaderboard_cache'
+    };
+  } catch (error) {
+    return { error: `Failed to check wallet tier: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+// Execute compare wallets
+async function executeCompareWallets(args: any) {
+  try {
+    if (!args.addresses || args.addresses.length < 2) {
+      return { error: "Please provide at least 2 addresses to compare" };
+    }
+    
+    if (args.addresses.length > 10) {
+      return { error: "Maximum 10 addresses can be compared at once" };
+    }
+    
+    console.log(`🔍 Comparing ${args.addresses.length} wallets`);
+    
+    const addressesLower = args.addresses.map((a: string) => a.toLowerCase());
+    
+    const { data: wallets, error } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('address, balance, category, emoji, label, transaction_count')
+      .in('address', addressesLower);
+    
+    if (error) throw error;
+    
+    // Enrich with missing addresses
+    const found = new Set(wallets?.map(w => w.address.toLowerCase()) || []);
+    const missing = addressesLower.filter((a: string) => !found.has(a));
+    
+    const comparison = (wallets || []).map(w => ({
+      address: w.address,
+      balance: Number(w.balance),
+      tier: `${w.category} ${w.emoji}`,
+      label: w.label || null,
+      transactionCount: w.transaction_count
+    }));
+    
+    // Sort by balance descending
+    comparison.sort((a, b) => b.balance - a.balance);
+    
+    return {
+      wallets: comparison,
+      totalCompared: comparison.length,
+      notFound: missing.length > 0 ? missing : null,
+      source: 'wallet_leaderboard_cache'
+    };
+  } catch (error) {
+    return { error: `Failed to compare wallets: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+// Execute search wallet by label
+async function executeSearchWalletByLabel(args: any) {
+  try {
+    const searchTerm = args.searchTerm.toLowerCase();
+    
+    console.log(`🔍 Searching for wallets with label: ${searchTerm}`);
+    
+    const { data: wallets, error } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('address, balance, category, emoji, label, is_flagship, is_exchange')
+      .not('label', 'is', null)
+      .ilike('label', `%${searchTerm}%`)
+      .order('balance', { ascending: false });
+    
+    if (error) throw error;
+    
+    if (!wallets || wallets.length === 0) {
+      return { 
+        error: `No wallets found with label containing "${args.searchTerm}". Try searching for: Marketing, Treasury, Liquidity, MEXC, BitMart, etc.` 
+      };
+    }
+    
+    return {
+      searchTerm: args.searchTerm,
+      results: wallets.map(w => ({
+        address: w.address,
+        label: w.label,
+        balance: Number(w.balance),
+        tier: `${w.category} ${w.emoji}`,
+        type: w.is_flagship ? 'Flagship' : w.is_exchange ? 'Exchange' : 'Other'
+      })),
+      count: wallets.length,
+      source: 'wallet_leaderboard_cache'
+    };
+  } catch (error) {
+    return { error: `Failed to search wallets: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+// Execute get inactive wallets
+async function executeGetInactiveWallets(args: any) {
+  try {
+    const minBalance = args.minBalance || 1000;
+    const limit = args.limit || 20;
+    
+    console.log(`🔍 Finding inactive wallets (min balance: ${minBalance} WCO)`);
+    
+    // Get wallets with low or zero transaction count
+    const { data: wallets, error } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('address, balance, category, emoji, label, transaction_count')
+      .gte('balance', minBalance)
+      .lte('transaction_count', 5) // Few or no recent transactions
+      .order('balance', { ascending: false })
+      .limit(limit);
+    
+    if (error) throw error;
+    
+    if (!wallets || wallets.length === 0) {
+      return { 
+        message: `No inactive wallets found with balance >= ${minBalance} WCO. This could mean all large holders are active!` 
+      };
+    }
+    
+    return {
+      criteria: {
+        minBalance: minBalance,
+        maxTransactions: 5
+      },
+      wallets: wallets.map(w => ({
+        address: w.address,
+        balance: Number(w.balance),
+        tier: `${w.category} ${w.emoji}`,
+        label: w.label || null,
+        transactionCount: w.transaction_count
+      })),
+      count: wallets.length,
+      note: "Based on transaction_count from cache. Lower count may indicate less recent activity.",
+      source: 'wallet_leaderboard_cache'
+    };
+  } catch (error) {
+    return { error: `Failed to fetch inactive wallets: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
 // Execute get WCO volume
 async function executeGetWcoVolume(args: any) {
   try {
@@ -1693,6 +1989,11 @@ async function executeTool(toolName: string, args: any) {
     getBlockCountdown: executeGetBlockCountdown,
     getTotalHoldersFromCache: executeGetTotalHoldersFromCache,
     getCategoryStats: executeGetCategoryStats,
+    getWalletsByCategory: executeGetWalletsByCategory,
+    getWalletTier: executeGetWalletTier,
+    compareWallets: executeCompareWallets,
+    searchWalletByLabel: executeSearchWalletByLabel,
+    getInactiveWallets: executeGetInactiveWallets,
     getWcoVolume: executeGetWcoVolume,
     getMostActiveWallet: executeGetMostActiveWallet,
     getWSwapPools: executeGetWSwapPools
@@ -1851,6 +2152,14 @@ You can now answer advanced queries including:
 
 **The W-Chain Ecosystem:**
 - Native WCO Token: holders, balances, transfers, distribution, categories (Kraken 🦑, Whale 🐋, Shark 🦈, Dolphin 🐬, Fish 🐟, Octopus 🐙, Crab 🦀, Shrimp 🦐, Plankton 🦠)
+- **Wallet Tracking & Analysis**: 
+  - Query wallets by Ocean Creature tier (Kraken, Whale, Shark, Dolphin, Fish, Octopus, Crab, Shrimp, Plankton)
+  - Check specific wallet tier and ranking
+  - Compare multiple wallets side-by-side (team wallets, exchanges, etc.)
+  - Search wallets by label (Marketing, Treasury, Liquidity, MEXC, BitMart, Bitrue)
+  - Find inactive wallets with minimum balance thresholds
+  - **Flagship Wallets** 🛳️: Special labeled wallets for team/treasury operations (Marketing, Liquidity, Treasury, etc.)
+  - **Exchange Wallets** ⚓: MEXC, BitMart, Bitrue exchange addresses
 - All Tokens: ERC-20 tokens, ERC-721 NFTs, ERC-1155 tokens on W-Chain
 - Transactions: detailed transaction info, token transfers, internal transactions, logs, execution status, receipts
 - Blocks: block data, block transactions, validators, gas usage, rewards, countdown estimates
