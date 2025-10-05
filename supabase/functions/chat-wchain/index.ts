@@ -757,109 +757,52 @@ async function executeGetTopHolders(args: any) {
     if (!cacheError && cachedHolders && cachedHolders.length > 0) {
       console.log(`✅ Cache hit: ${cachedHolders.length} holders from Supabase cache`);
       
-      // Get total count from metadata
-      const { data: metadata } = await supabase
-        .from('wallet_cache_metadata')
-        .select('total_holders')
-        .order('last_refresh', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // Compute total count for the requested category (or overall if no filter)
+      let totalForScope: number | null = null;
+      try {
+        if (categoryFilter) {
+          const { count } = await supabase
+            .from('wallet_leaderboard_cache')
+            .select('address', { count: 'exact', head: true })
+            .ilike('category', `%${categoryFilter}%`);
+          totalForScope = typeof count === 'number' ? count : null;
+        } else {
+          const { data: metadata } = await supabase
+            .from('wallet_cache_metadata')
+            .select('total_holders')
+            .order('last_refresh', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          totalForScope = metadata?.total_holders || null;
+        }
+      } catch (e) {
+        console.warn('Could not compute total count for scope:', e);
+      }
+
+      // Deduplicate by address just in case (defensive)
+      const seen = new Set<string>();
+      const uniqueHolders = cachedHolders.filter((h) => {
+        const addr = (h.address || '').toLowerCase();
+        if (!addr || seen.has(addr)) return false;
+        seen.add(addr);
+        return true;
+      });
       
       return {
-        holders: cachedHolders.map(h => ({
+        holders: uniqueHolders.map(h => ({
           address: h.address,
           balance: Number(h.balance),
           category: `${h.category} ${h.emoji}`,
           transactionCount: h.transaction_count
         })),
-        total: metadata?.total_holders || cachedHolders.length,
+        total: totalForScope ?? uniqueHolders.length,
         source: 'wallet_leaderboard_cache'
       };
     }
     
-    console.log('⚠️ Cache empty/error, falling back to REST API...');
-    
-    // STEP 2: Fallback to REST API (same as frontend useWalletLeaderboard)
-    const allWallets = [];
-    const ITEMS_PER_PAGE = 50;
-    let currentPage = 1;
-    let hasMore = true;
-    
-    // Fetch enough pages to get the requested limit
-    const maxPagesToFetch = Math.ceil(requestedLimit / ITEMS_PER_PAGE) + 5; // +5 buffer for filtering
-    
-    while (hasMore && currentPage <= maxPagesToFetch) {
-      try {
-        const pageData = await fetchAPI(
-          `/addresses?page=${currentPage}&items_count=${ITEMS_PER_PAGE}`,
-          30000 // 30s cache
-        );
-        
-        if (!pageData?.items || pageData.items.length === 0) {
-          hasMore = false;
-          break;
-        }
-        
-        // Categorize each wallet
-        for (const wallet of pageData.items) {
-          const balance = Number(wallet.coin_balance) / 1e18;
-          const category = categorizeWallet(balance, wallet.hash);
-          
-          allWallets.push({
-            address: wallet.hash,
-            balance: balance,
-            category: category.category,
-            emoji: category.emoji,
-            label: category.label,
-            transactionCount: wallet.tx_count || 0
-          });
-        }
-        
-        console.log(`📄 Page ${currentPage}: ${pageData.items.length} wallets (total: ${allWallets.length})`);
-        
-        hasMore = pageData.next_page_params !== null;
-        currentPage++;
-        
-        // Small delay to avoid rate limiting
-        if (hasMore) await new Promise(resolve => setTimeout(resolve, 50));
-      } catch (pageError) {
-        console.error(`Page ${currentPage} failed:`, pageError);
-        hasMore = false;
-      }
-    }
-    
-    if (allWallets.length === 0) {
-      return { 
-        error: "Oops, hit a reef there! 🪸 Couldn't fetch holder data from any source right now. Please try again in a moment!" 
-      };
-    }
-    
-    // Apply category filter if specified
-    let filteredWallets = allWallets;
-    if (categoryFilter) {
-      filteredWallets = allWallets.filter(w => 
-        w.category.toLowerCase().includes(categoryFilter)
-      );
-      console.log(`🔍 Filtered to ${filteredWallets.length} wallets in category "${categoryFilter}"`);
-    }
-    
-    // Sort by balance and take top N
-    filteredWallets.sort((a, b) => b.balance - a.balance);
-    const topHolders = filteredWallets.slice(0, requestedLimit);
-    
-    console.log(`✅ REST API success: returning ${topHolders.length} holders`);
-    
+    console.log('⚠️ Cache empty/error, returning not-available message...');
     return {
-      holders: topHolders.map(h => ({
-        address: h.address,
-        balance: h.balance,
-        category: `${h.category} ${h.emoji}`,
-        transactionCount: h.transactionCount,
-        label: h.label
-      })),
-      total: filteredWallets.length,
-      source: 'rest-api-fallback',
-      note: 'Data from live W-Chain API (cache was unavailable)'
+      error: 'Top holders are not available from the Ocean Leaderboard cache yet. The wallet cache is currently being refreshed. Please try again shortly.'
     };
     
   } catch (error) {
@@ -877,59 +820,8 @@ async function executeGetHolderDistribution() {
     if (error) throw error;
     
     if (!holders || holders.length === 0) {
-      console.log("⚠️ Cache empty/error, falling back to REST API...");
-      
-      // Fallback to REST API with pagination
-      const allWallets: any[] = [];
-      let page = 1;
-      const limit = 50;
-      let hasMore = true;
-
-      while (hasMore && page <= 10) {
-        try {
-          const url = `https://scan.w-chain.com/api/v2/addresses?page=${page}&filter=validated&sort=coin_balance&order=desc`;
-          const response = await fetch(url);
-          
-          if (!response.ok) break;
-          
-          const data = await response.json();
-          const items = data.items || [];
-          
-          if (items.length === 0) break;
-          
-          allWallets.push(...items);
-          console.log(`📄 Page ${page}: ${items.length} wallets (total: ${allWallets.length})`);
-          
-          hasMore = items.length >= limit;
-          page++;
-        } catch (error) {
-          console.error(`❌ Error fetching page ${page}:`, error);
-          break;
-        }
-      }
-
-      // Categorize all wallets
-      const dist: Record<string, number> = {};
-      
-      allWallets.forEach(wallet => {
-        const balance = parseFloat(wallet.coin_balance || "0") / 1e18;
-        const { category, emoji } = categorizeWallet(balance, wallet.hash);
-        const key = `${category} ${emoji}`;
-        dist[key] = (dist[key] || 0) + 1;
-      });
-
-      console.log(`✅ REST API success: returning ${allWallets.length} holders`);
-      
       return {
-        distribution: Object.entries(dist)
-          .map(([category, count]) => ({
-            category,
-            count,
-            percentage: ((count / allWallets.length) * 100).toFixed(2)
-          }))
-          .sort((a, b) => b.count - a.count),
-        totalHolders: allWallets.length,
-        source: 'rest-api'
+        error: 'Holder distribution is not available from the Ocean Leaderboard cache yet. The wallet cache is currently being refreshed. Please try again shortly.'
       };
     }
     
@@ -2178,7 +2070,7 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
     if (isHoldersCount) {
       const res = await executeGetTotalHoldersFromCache();
       if ((res as any)?.totalHolders != null) {
-        const msg = `Diving in! 💧\n\n**Total WCO holders:** ${formatNumber((res as any).totalHolders)}\n\nSource: ${(res as any).source?.replace(/-/g, ' ')}. 🫧`;
+        const msg = `Diving in! 💧\n\n**Total WCO holders:** ${formatNumber((res as any).totalHolders)}\n\nSource: ${(res as any).source?.replace(/[-_]/g, ' ')}. 🫧`;
         return await respondAndStore(msg);
       }
     }
@@ -2186,9 +2078,12 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
     if (topKrakenMatch) {
       const limit = Math.max(1, Math.min(50, parseInt((topKrakenMatch[1] || '10'), 10) || 10));
       const res = await executeGetTopHolders({ limit, category: 'Kraken' });
-      if ((res as any)?.holders?.length > 0) {
+      if ( (res as any)?.holders?.length > 0) {
         const rows = (res as any).holders.map((h: any, i: number) => `${i + 1}. ${formatAddress(h.address)} — ${formatNumber(h.balance)} WCO`);
-        const msg = `Here are the top ${limit} Krakens 🦑:\n\n${rows.join('\n')}\n\nTotal holders scanned: ${formatNumber((res as any).total)}. Source: ${(res as any).source?.replace(/-/g, ' ')}.`;
+        const msg = `Here are the top ${limit} Krakens 🦑:\n\n${rows.join('\n')}\n\nTotal holders scanned: ${formatNumber((res as any).total)}. Source: ${(res as any).source?.replace(/[-_]/g, ' ')}.`;
+        return await respondAndStore(msg);
+      } else if ((res as any)?.error) {
+        const msg = `Oops, the Kraken leaderboard is updating right now. Please try again in a few minutes. 🪸`;
         return await respondAndStore(msg);
       }
     }
@@ -2197,7 +2092,10 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
       const res = await executeGetHolderDistribution();
       if ((res as any)?.distribution?.length > 0) {
         const rows = (res as any).distribution.map((d: any) => `- ${d.category}: ${formatNumber(d.count)} (${d.percentage}%)`);
-        const msg = `🫧 Holder distribution across Ocean tiers:\n\n${rows.join('\n')}\n\nTotal holders: ${formatNumber((res as any).totalHolders)}. Source: ${(res as any).source?.replace(/-/g, ' ')}.`;
+        const msg = `🫧 Holder distribution across Ocean tiers:\n\n${rows.join('\n')}\n\nTotal holders: ${formatNumber((res as any).totalHolders)}. Source: ${(res as any).source?.replace(/[-_]/g, ' ')}.`;
+        return await respondAndStore(msg);
+      } else if ((res as any)?.error) {
+        const msg = `Holder distribution is updating right now. Please try again in a few minutes. 🪸`;
         return await respondAndStore(msg);
       }
     }
