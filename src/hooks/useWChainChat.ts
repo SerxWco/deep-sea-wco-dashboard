@@ -86,6 +86,7 @@ export const useWChainChat = () => {
       // Call edge function
       const { data, error: functionError } = await supabase.functions.invoke('chat-wchain', {
         body: {
+          // send only current turn; server now adds history context
           messages: [{ role: 'user', content }],
           conversationId,
           sessionId
