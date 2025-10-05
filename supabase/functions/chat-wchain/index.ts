@@ -38,6 +38,40 @@ async function fetchAPI(endpoint: string, cacheTTL = 0) {
   return data;
 }
 
+// LLM configuration and utilities
+const MAX_HISTORY_MESSAGES = 12; // Number of prior messages to include (combined user/assistant)
+const MAX_TOOL_ROUNDS = 3;       // Max iterative tool-use rounds
+const MAX_TOOL_CONTENT_CHARS = 12000; // Cap tool payloads sent back to the model
+
+function chooseModel(latestUserMessage: string, hasTools: boolean): string {
+  const text = (latestUserMessage || '').toLowerCase();
+  const lengthScore = latestUserMessage ? latestUserMessage.length : 0;
+  const heavyKeywords = /(why|explain|analy(s|z)e|compare|strategy|design|architecture|root cause|derive|prove|optimi[sz]e|trade[- ]?off|most active wallet|distribution|volume|supply)/i;
+
+  const needsReasoning = heavyKeywords.test(text) || lengthScore > 400;
+  if (needsReasoning || hasTools) {
+    // Prefer stronger reasoning when tools or complexity likely
+    return 'google/gemini-2.5-pro';
+  }
+  return 'google/gemini-2.5-flash';
+}
+
+function mapHistoryToMessages(history: Array<{ role: string; content: string }>, limit: number) {
+  if (!Array.isArray(history) || history.length === 0) return [] as any[];
+  const trimmed = history.slice(Math.max(0, history.length - limit));
+  return trimmed
+    .filter((m) => m && typeof m.content === 'string' && (m.role === 'user' || m.role === 'assistant' || m.role === 'system'))
+    .map((m) => ({ role: m.role, content: m.content }));
+}
+
+function truncateContentForModel(content: string, maxChars: number = MAX_TOOL_CONTENT_CHARS): string {
+  if (!content) return content;
+  if (content.length <= maxChars) return content;
+  const head = content.slice(0, Math.max(0, maxChars - 200));
+  const omitted = content.length - head.length;
+  return `${head}\n...[truncated ${omitted} chars]`;
+}
+
 // Special wallet definitions (aligned with Dashboard logic)
 const FLAGSHIP_WALLETS: Record<string, string> = {
   // Core/vesting/treasury addresses
@@ -2100,126 +2134,107 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
       }
     }
 
-    // First AI call with tools
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages
-        ],
-        tools: tools,
-        tool_choice: 'auto'
-      }),
-    });
+    // Build conversation context (system + history + latest turn)
+    const latestUserMessage = Array.isArray(messages) && messages.length > 0 ? (messages[messages.length - 1]?.content || '') : '';
+    const historyForModel = mapHistoryToMessages(conversationHistory, MAX_HISTORY_MESSAGES);
+    const modelToUse = chooseModel(latestUserMessage, false);
 
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required, please add funds to your Lovable AI workspace." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw new Error(`AI gateway error: ${aiResponse.status}`);
-    }
+    const decoding = {
+      temperature: 0.2,
+      top_p: 0.9,
+      max_tokens: 1200
+    } as const;
 
-    const aiData = await aiResponse.json();
-    const choice = aiData.choices[0];
-    
-    // Check if AI wants to use tools
-    if (choice.message.tool_calls) {
-      console.log('AI requested tool calls:', choice.message.tool_calls.length);
-      
-      // Execute all requested tools
-      const toolResults = await Promise.all(
-        choice.message.tool_calls.map(async (toolCall: any) => {
-          const result = await executeTool(
-            toolCall.function.name,
-            JSON.parse(toolCall.function.arguments)
-          );
-          
-          return {
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            name: toolCall.function.name,
-            content: JSON.stringify(result)
-          };
-        })
-      );
-      
-      // Second AI call with tool results
-      const finalResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    // First AI call with tools (iterative tool-use loop)
+    const startTime = Date.now();
+    let accumulatedMessages: any[] = [
+      { role: 'system', content: systemPrompt },
+      ...historyForModel,
+      ...messages
+    ];
+
+    let finalAssistantMessage: string | null = null;
+    let lastToolCalls: any[] | null = null;
+    const executedToolCalls: any[] = [];
+    const executedToolResults: any[] = [];
+
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${LOVABLE_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages,
-            choice.message,
-            ...toolResults
-          ]
+          model: modelToUse,
+          messages: accumulatedMessages,
+          tools: tools,
+          tool_choice: 'auto',
+          ...decoding
         }),
       });
 
-      const finalData = await finalResponse.json();
-      const finalMessage = finalData.choices[0].message.content;
-      
-      // Store messages in database if we have a conversation ID
-      if (finalConversationId) {
-        const userMessage = messages[messages.length - 1];
-        
-        // Store user message
-        await supabase.from('chat_messages').insert({
-          conversation_id: finalConversationId,
-          role: 'user',
-          content: userMessage.content,
-          tool_calls: null,
-          tool_results: null
-        });
-        
-        // Store assistant message with tool calls
-        await supabase.from('chat_messages').insert({
-          conversation_id: finalConversationId,
-          role: 'assistant',
-          content: finalMessage,
-          tool_calls: choice.message.tool_calls,
-          tool_results: toolResults
-        });
-        
-        // Update conversation timestamp
-        await supabase
-          .from('chat_conversations')
-          .update({ updated_at: new Date().toISOString() })
-          .eq('id', finalConversationId);
-        
-        console.log('💾 Saved conversation messages');
+      if (!aiResponse.ok) {
+        if (aiResponse.status === 429) {
+          return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (aiResponse.status === 402) {
+          return new Response(JSON.stringify({ error: "Payment required, please add funds to your Lovable AI workspace." }), {
+            status: 402,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw new Error(`AI gateway error: ${aiResponse.status}`);
       }
-      
-      return new Response(JSON.stringify({ 
-        message: finalMessage,
-        conversationId: finalConversationId 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+
+      const aiData = await aiResponse.json();
+      const choice = aiData.choices?.[0];
+      const toolCalls = choice?.message?.tool_calls || null;
+      lastToolCalls = toolCalls;
+
+      if (toolCalls && toolCalls.length > 0) {
+        // Execute tools in parallel, append tool results, continue loop
+        const toolResults = await Promise.all(
+          toolCalls.map(async (toolCall: any) => {
+            const result = await executeTool(
+              toolCall.function.name,
+              JSON.parse(toolCall.function.arguments)
+            );
+            const content = truncateContentForModel(JSON.stringify(result));
+            return {
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: toolCall.function.name,
+              content
+            };
+          })
+        );
+
+        // Track for observability/storage
+        executedToolCalls.push(...toolCalls);
+        executedToolResults.push(...toolResults);
+
+        accumulatedMessages = [
+          ...accumulatedMessages,
+          choice.message,
+          ...toolResults
+        ];
+        continue;
+      }
+
+      // No more tools requested, take the assistant content
+      finalAssistantMessage = choice?.message?.content || '';
+      break;
     }
-    
-    // No tools needed, return direct response
-    const directMessage = choice.message.content;
+
+    const latencyMs = Date.now() - startTime;
+    console.log(`🧠 Model: ${modelToUse}, rounds: ${lastToolCalls ? 'with tools' : 'no tools'}, latency: ${latencyMs}ms`);
+
+    // Decide message to return
+    const directMessage = finalAssistantMessage || 'Sorry, I could not generate a response.';
     
     // Store messages in database if we have a conversation ID
     if (finalConversationId) {
@@ -2234,13 +2249,13 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
         tool_results: null
       });
       
-      // Store assistant message
+      // Store assistant message (include tool metadata if any were executed)
       await supabase.from('chat_messages').insert({
         conversation_id: finalConversationId,
         role: 'assistant',
         content: directMessage,
-        tool_calls: null,
-        tool_results: null
+        tool_calls: executedToolCalls.length > 0 ? executedToolCalls : null,
+        tool_results: executedToolResults.length > 0 ? executedToolResults : null
       });
       
       // Update conversation timestamp
