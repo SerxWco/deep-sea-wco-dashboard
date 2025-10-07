@@ -47,38 +47,55 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Top Row - Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-          <CryptoMetricCard
-            title="WCO Price"
-            value={wcoPrice?.price ? formatCurrency(wcoPrice.price) : (data ? formatCurrency(data.current_price) : (loading || priceLoading) ? "Loading..." : "$0.0000")}
-            change={(data && data.price_change_percentage_24h !== undefined) ? { 
-              value: formatPercentage(data.price_change_percentage_24h), 
-              isPositive: data.price_change_percentage_24h >= 0 
-            } : undefined}
-            icon={<DollarSign className="h-5 w-5" />}
-          />
+        {/* Hero Section - Bubbles + Key Metrics */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Bubbles Chatbot - Takes 3 columns on large screens */}
+          <div className="lg:col-span-3">
+            <WChainChatbot />
+          </div>
           
-          <CryptoMetricCard
-            title="24h Change"
-            value={data ? formatPercentage(data.price_change_percentage_24h) : loading ? "Loading..." : "+0.00%"}
-            change={data ? { 
-              value: formatCurrency(Math.abs(data.price_change_24h)), 
-              isPositive: data.price_change_24h >= 0 
-            } : undefined}
-            icon={<TrendingUp className="h-5 w-5" />}
-          />
-          
-          <CryptoMetricCard
-            title="Market Cap"
-            value={data ? formatCurrency(data.market_cap) : loading ? "Loading..." : "$0.00M"}
-            icon={<BarChart3 className="h-5 w-5" />}
-          />
-          
+          {/* Top 3 Key Metrics - Takes 2 columns on large screens */}
+          <div className="lg:col-span-2 grid grid-cols-1 gap-6">
+            <CryptoMetricCard
+              title="WCO Price"
+              value={wcoPrice?.price ? formatCurrency(wcoPrice.price) : (data ? formatCurrency(data.current_price) : (loading || priceLoading) ? "Loading..." : "$0.0000")}
+              change={(data && data.price_change_percentage_24h !== undefined) ? { 
+                value: formatPercentage(data.price_change_percentage_24h), 
+                isPositive: data.price_change_percentage_24h >= 0 
+              } : undefined}
+              icon={<DollarSign className="h-5 w-5" />}
+            />
+            
+            <CryptoMetricCard
+              title="24h Change"
+              value={data ? formatPercentage(data.price_change_percentage_24h) : loading ? "Loading..." : "+0.00%"}
+              change={data ? { 
+                value: formatCurrency(Math.abs(data.price_change_24h)), 
+                isPositive: data.price_change_24h >= 0 
+              } : undefined}
+              icon={<TrendingUp className="h-5 w-5" />}
+            />
+            
+            <CryptoMetricCard
+              title="Market Cap"
+              value={data ? formatCurrency(data.market_cap) : loading ? "Loading..." : "$0.00M"}
+              icon={<BarChart3 className="h-5 w-5" />}
+            />
+          </div>
+        </div>
+
+        {/* Additional Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <CryptoMetricCard
             title="24h Volume"
             value={data ? formatCurrency(data.total_volume) : loading ? "Loading..." : "$0.00K"}
             icon={<Activity className="h-5 w-5" />}
+          />
+          
+          <CryptoMetricCard
+            title="Total WCO Holders"
+            value={holdersLoading ? "..." : formatNumber(totalHolders)}
+            icon={<Users className="h-5 w-5" />}
           />
         </div>
 
@@ -89,12 +106,6 @@ export default function Dashboard() {
 
         {/* Network Statistics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-          <CryptoMetricCard
-            title="Total WCO Holders"
-            value={holdersLoading ? "..." : formatNumber(totalHolders)}
-            icon={<Users className="h-5 w-5" />}
-          />
-          
           <CryptoMetricCard
             title="Circulating Supply"
             value={supplyData ? `${parseFloat(supplyData.summary.circulating_supply_wco).toLocaleString()} WCO` : supplyLoading ? "..." : "N/A"}
@@ -132,11 +143,6 @@ export default function Dashboard() {
             value={networkStats ? `${networkStats.averageTransactionSize} WCO` : networkLoading ? "..." : "N/A"}
             icon={<BarChart3 className="h-5 w-5" />}
           />
-        </div>
-
-        {/* AI Chatbot */}
-        <div className="mt-8">
-          <WChainChatbot />
         </div>
       </div>
     </div>
