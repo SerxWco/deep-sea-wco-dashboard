@@ -3,7 +3,6 @@ import { Send, Trash2, Loader2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWChainChat } from '@/hooks/useWChainChat';
 import { toast } from 'sonner';
 import { BubblesAvatar } from './BubblesAvatar';
@@ -69,7 +68,10 @@ export const WChainChatbot = () => {
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col p-0">
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        <div 
+          ref={scrollRef}
+          className="flex-1 p-4 overflow-y-auto scroll-smooth"
+        >
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center space-y-6 px-4">
               <BubblesAvatar size="lg" state="idle" />
@@ -138,7 +140,7 @@ export const WChainChatbot = () => {
               )}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         <form onSubmit={handleSubmit} className="p-4 border-t">
           <div className="flex gap-2">
