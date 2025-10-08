@@ -10,6 +10,7 @@ import OceanCreatures from "./pages/OceanCreatures";
 import Portfolio from "./pages/Portfolio";
 import Tokens from "./pages/Tokens";
 import Wave from "./pages/Wave";
+import WSwap from "./pages/WSwap";
 import WcoInfo from "./pages/WcoInfo";
 import KrakenWatchlistPage from "./pages/KrakenWatchlist";
 import AdminKnowledge from "./pages/AdminKnowledge";
@@ -56,6 +57,11 @@ const App = () => (
           <Route path="/wave" element={
             <DashboardLayout>
               <Wave />
+            </DashboardLayout>
+          } />
+          <Route path="/wswap" element={
+            <DashboardLayout>
+              <WSwap />
             </DashboardLayout>
           } />
           <Route path="/whales" element={

@@ -6,7 +6,8 @@ import {
   Coins, 
   Waves, 
   Info, 
-  Zap
+  Zap,
+  ArrowLeftRight
 } from "lucide-react";
 import {
   Sidebar,
@@ -26,6 +27,7 @@ const navigationItems = [
   { title: "Portfolio", url: "/portfolio", icon: PieChart },
   { title: "Tokens", url: "/tokens", icon: Coins },
   { title: "WAVE", url: "/wave", icon: Waves },
+  { title: "W-Swap", url: "/wswap", icon: ArrowLeftRight },
   { title: "Kraken Tracker", url: "/whales", icon: Zap },
   { title: "WCO Info", url: "/info", icon: Info },
 ];
