@@ -40,7 +40,7 @@ export const WChainChatbot = () => {
   };
 
   return (
-    <Card className="w-full h-[600px] flex flex-col">
+    <Card className="w-full h-[600px] min-h-[600px] max-h-[600px] flex flex-col">
       <CardHeader className="border-b bg-gradient-to-r from-card via-card to-primary/5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -67,10 +67,10 @@ export const WChainChatbot = () => {
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 flex flex-col p-0">
+      <CardContent className="flex-1 flex flex-col p-0 min-h-0">
         <div 
           ref={scrollRef}
-          className="flex-1 p-4 overflow-y-auto scroll-smooth"
+          className="flex-1 min-h-0 p-4 overflow-y-auto scroll-smooth"
         >
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center space-y-6 px-4">
