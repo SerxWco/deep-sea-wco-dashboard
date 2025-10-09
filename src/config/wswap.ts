@@ -29,11 +29,11 @@ export const WSWAP_LPS: LPConfig[] = [
   },
   {
     address: "0xD4e9176d5189dbb24F40e5c6c45bb1682dCb3324",
-    pair: "WCO/WAVE",
+    pair: "WCO/USDT",
     token0: "WCO",
-    token1: "WAVE",
-    label: "WCO-WAVE LP #2",
-    isWavePair: true
+    token1: "USDT",
+    label: "WCO-USDT LP",
+    isWavePair: false
   }
 ];
 
