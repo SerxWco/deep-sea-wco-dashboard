@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { WCHAIN_SCAN_API, WSWAP_LPS, MAIN_TOKEN, REFRESH_INTERVAL } from '@/config/wswap';
 import { WSwapTrade, WChainTokenTransaction, TradeStats } from '@/types/wswap';
+import { useWSwapReserves } from './useWSwapReserves';
 
 export const useWSwapTrades = (selectedLP: string = 'all', pairFilter?: string) => {
   const [trades, setTrades] = useState<WSwapTrade[]>([]);
@@ -15,6 +16,8 @@ export const useWSwapTrades = (selectedLP: string = 'all', pairFilter?: string) 
     buyVolume24h: 0,
     sellVolume24h: 0
   });
+
+  const { getPrice, loading: reservesLoading } = useWSwapReserves();
 
   const classifyTrade = (tx: WChainTokenTransaction, lpAddress: string): 'buy' | 'sell' => {
     const lp = WSWAP_LPS.find(l => l.address === lpAddress);
@@ -33,28 +36,40 @@ export const useWSwapTrades = (selectedLP: string = 'all', pairFilter?: string) 
   };
 
   const fetchTrades = async () => {
+    if (reservesLoading) return;
+
     try {
-      console.log('[useWSwapTrades] Starting fetchTrades...');
       // Filter LPs based on pairFilter if provided
       const filteredLPs = pairFilter 
         ? WSWAP_LPS.filter(lp => lp.pair.includes(pairFilter))
         : WSWAP_LPS;
-      
-      console.log('[useWSwapTrades] Filtered LPs:', filteredLPs.length, filteredLPs.map(lp => lp.label));
 
       const tradePromises = filteredLPs.map(async (lp) => {
         try {
-          const url = `${WCHAIN_SCAN_API}?module=account&action=tokentx&address=${lp.address}`;
-          console.log('[useWSwapTrades] Fetching from:', url);
-          const response = await axios.get(url);
-          console.log('[useWSwapTrades] Response for', lp.label, ':', response.data?.result?.length || 0, 'transactions');
+          const response = await axios.get(
+            `${WCHAIN_SCAN_API}?module=account&action=tokentx&address=${lp.address}`
+          );
 
           if (response.data?.result && Array.isArray(response.data.result)) {
-            return response.data.result.map((tx: WChainTokenTransaction) => ({
-              tx,
-              lpAddress: lp.address,
-              lpLabel: lp.label
-            }));
+            return response.data.result.map((tx: WChainTokenTransaction) => {
+              const type = classifyTrade(tx, lp.address);
+              const price = getPrice(lp.address, tx.tokenSymbol);
+              const amount = Number(tx.value) / Math.pow(10, Number(tx.tokenDecimal));
+
+              return {
+                hash: tx.hash,
+                timestamp: Number(tx.timeStamp),
+                time: new Date(Number(tx.timeStamp) * 1000),
+                from: tx.from,
+                to: tx.to,
+                tokenSymbol: tx.tokenSymbol,
+                amount,
+                type,
+                price,
+                lpAddress: lp.address,
+                lpLabel: lp.label
+              } as WSwapTrade;
+            });
           }
           return [];
         } catch (err) {
@@ -63,57 +78,24 @@ export const useWSwapTrades = (selectedLP: string = 'all', pairFilter?: string) 
         }
       });
 
-      const allTxArrays = await Promise.all(tradePromises);
-      const allTxData = allTxArrays.flat();
-      console.log('[useWSwapTrades] Total transactions:', allTxData.length);
+      const allTradesArrays = await Promise.all(tradePromises);
+      let allTrades = allTradesArrays.flat();
 
-      // Group transactions by hash to pair WCO and WAVE transactions
-      const txByHash = new Map<string, Array<{ tx: WChainTokenTransaction, lpAddress: string, lpLabel: string }>>();
-      allTxData.forEach(data => {
-        const existing = txByHash.get(data.tx.hash) || [];
-        existing.push(data);
-        txByHash.set(data.tx.hash, existing);
-      });
-      
-      console.log('[useWSwapTrades] Unique hashes:', txByHash.size);
-
-      // Calculate prices from paired WCO + WAVE transactions
-      let allTrades: WSwapTrade[] = [];
-      txByHash.forEach((txGroup) => {
-        const wcoTx = txGroup.find(t => t.tx.tokenSymbol === 'WCO');
-        const waveTx = txGroup.find(t => t.tx.tokenSymbol === 'WAVE');
-        
-        if (!wcoTx || !waveTx) {
-          console.log('[useWSwapTrades] Skipping incomplete swap - tokens:', txGroup.map(t => t.tx.tokenSymbol));
-          return; // Skip incomplete swaps
+      // Deduplicate by hash - keep the token that's not WAVE for display
+      const tradesByHash = new Map<string, WSwapTrade>();
+      allTrades.forEach(trade => {
+        const existing = tradesByHash.get(trade.hash);
+        if (!existing) {
+          tradesByHash.set(trade.hash, trade);
+        } else {
+          // Prefer non-WAVE tokens for display
+          if (trade.tokenSymbol !== 'WAVE' && existing.tokenSymbol === 'WAVE') {
+            tradesByHash.set(trade.hash, trade);
+          }
         }
-        
-        const wcoAmount = Number(wcoTx.tx.value) / Math.pow(10, Number(wcoTx.tx.tokenDecimal));
-        const waveAmount = Number(waveTx.tx.value) / Math.pow(10, Number(waveTx.tx.tokenDecimal));
-        
-        // Price = WAVE per WCO
-        const price = waveAmount / wcoAmount;
-        
-        // Use WCO transaction for display and classification
-        const type = classifyTrade(wcoTx.tx, wcoTx.lpAddress);
-        
-        allTrades.push({
-          hash: wcoTx.tx.hash,
-          timestamp: Number(wcoTx.tx.timeStamp),
-          time: new Date(Number(wcoTx.tx.timeStamp) * 1000),
-          from: wcoTx.tx.from,
-          to: wcoTx.tx.to,
-          tokenSymbol: 'WCO',
-          amount: wcoAmount,
-          waveAmount: waveAmount,
-          type,
-          price,
-          lpAddress: wcoTx.lpAddress,
-          lpLabel: wcoTx.lpLabel
-        });
       });
       
-      console.log('[useWSwapTrades] Total trades after pairing:', allTrades.length);
+      allTrades = Array.from(tradesByHash.values());
 
       // Sort by time (newest first)
       allTrades.sort((a, b) => b.timestamp - a.timestamp);
@@ -167,11 +149,11 @@ export const useWSwapTrades = (selectedLP: string = 'all', pairFilter?: string) 
     fetchTrades();
     const interval = setInterval(fetchTrades, REFRESH_INTERVAL);
     return () => clearInterval(interval);
-  }, [selectedLP, pairFilter]);
+  }, [selectedLP, pairFilter, reservesLoading]);
 
   return {
     trades,
-    loading,
+    loading: loading || reservesLoading,
     error,
     stats,
     refetch: fetchTrades
