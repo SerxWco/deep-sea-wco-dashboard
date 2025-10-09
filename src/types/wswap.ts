@@ -8,6 +8,7 @@ export interface WSwapTrade {
   to: string;
   tokenSymbol: string;
   amount: number;
+  waveAmount?: number;
   type: 'buy' | 'sell';
   price: number | null;
   lpAddress: string;
