@@ -7,6 +7,7 @@ export interface LPConfig {
   token0: string;
   token1: string;
   label: string;
+  isWavePair: boolean;
 }
 
 export const WSWAP_LPS: LPConfig[] = [
@@ -15,21 +16,24 @@ export const WSWAP_LPS: LPConfig[] = [
     pair: "WCO/WAVE",
     token0: "WCO",
     token1: "WAVE",
-    label: "WCO-WAVE LP #1"
+    label: "WCO-WAVE LP #1",
+    isWavePair: true
   },
   {
     address: "0xC61856cdf226645eaB487352C031Ec4341993F87",
-    pair: "WCO/WAVE",
-    token0: "WCO",
-    token1: "WAVE",
-    label: "WCO-WAVE LP #2"
+    pair: "OG88/WCO",
+    token0: "OG88",
+    token1: "WCO",
+    label: "OG88-WCO LP",
+    isWavePair: false
   },
   {
     address: "0xD4e9176d5189dbb24F40e5c6c45bb1682dCb3324",
     pair: "WCO/WAVE",
     token0: "WCO",
     token1: "WAVE",
-    label: "WCO-WAVE LP #3"
+    label: "WCO-WAVE LP #2",
+    isWavePair: true
   }
 ];
 

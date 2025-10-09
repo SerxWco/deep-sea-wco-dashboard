@@ -1,8 +1,9 @@
 import { useWChainPriceAPI } from "@/hooks/useWChainPriceAPI";
 import { usePriceHistory } from "@/hooks/usePriceHistory";
 import { CryptoMetricCard } from "@/components/CryptoMetricCard";
+import { WSwapTrades } from "@/components/WSwapTrades";
 import { formatCurrency, formatPercentage } from "@/utils/formatters";
-import { Waves, TrendingUp } from "lucide-react";
+import { Waves, TrendingUp, ArrowLeftRight } from "lucide-react";
 
 export default function Wave() {
   const { wavePrice, loading: priceLoading } = useWChainPriceAPI();
@@ -47,6 +48,19 @@ export default function Wave() {
         />
       </div>
 
+      {/* W-Swap Trading Activity */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-primary/20 rounded-lg">
+            <ArrowLeftRight className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-foreground">Live W-Swap Trading Activity</h2>
+            <p className="text-muted-foreground">Real-time WCO/WAVE trading pairs on W-Swap DEX</p>
+          </div>
+        </div>
+        <WSwapTrades pairFilter="WAVE" title="WCO/WAVE Recent Trades" />
+      </div>
 
       {/* Additional Info */}
       <div className="glass-ocean rounded-2xl p-6 border border-border/30">

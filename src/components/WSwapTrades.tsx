@@ -11,9 +11,19 @@ import { WSWAP_LPS } from '@/config/wswap';
 import { formatNumber } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
 
-export const WSwapTrades = () => {
+interface WSwapTradesProps {
+  pairFilter?: string;
+  title?: string;
+}
+
+export const WSwapTrades = ({ pairFilter, title = "W-Swap Live Trades" }: WSwapTradesProps) => {
   const [selectedLP, setSelectedLP] = useState<string>('all');
-  const { trades, loading, error, stats, refetch } = useWSwapTrades(selectedLP);
+  const { trades, loading, error, stats, refetch } = useWSwapTrades(selectedLP, pairFilter);
+  
+  // Filter LPs based on pairFilter
+  const availableLPs = pairFilter 
+    ? WSWAP_LPS.filter(lp => lp.pair.includes(pairFilter))
+    : WSWAP_LPS;
 
   // Prepare chart data (last 20 trades for visualization)
   const chartData = trades
@@ -68,7 +78,7 @@ export const WSwapTrades = () => {
             <StatCard
               icon={Activity}
               label="24h Volume"
-              value={`${formatNumber(stats.totalVolume24h, 2)} WCO`}
+              value={`${formatNumber(stats.totalVolume24h, 2)} ${pairFilter === 'WAVE' ? 'WCO' : 'Tokens'}`}
             />
             <StatCard
               icon={TrendingUp}
@@ -93,7 +103,7 @@ export const WSwapTrades = () => {
       <Card className="glass-ocean">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Trade Volume</span>
+            <span>Trade Volume (Last 20)</span>
             <Button
               variant="outline"
               size="sm"
@@ -135,7 +145,18 @@ export const WSwapTrades = () => {
                   dataKey="amount"
                   stroke="hsl(var(--primary))"
                   strokeWidth={2}
-                  dot={{ fill: 'hsl(var(--primary))', r: 4 }}
+                  dot={(props) => {
+                    const trade = trades[19 - props.index];
+                    return (
+                      <circle
+                        cx={props.cx}
+                        cy={props.cy}
+                        r={4}
+                        fill={trade?.type === 'buy' ? 'hsl(142, 76%, 36%)' : 'hsl(0, 84%, 60%)'}
+                        stroke="none"
+                      />
+                    );
+                  }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -147,20 +168,22 @@ export const WSwapTrades = () => {
       <Card className="glass-ocean">
         <CardHeader>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <CardTitle>Recent Trades</CardTitle>
-            <Select value={selectedLP} onValueChange={setSelectedLP}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Filter by LP" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All LPs</SelectItem>
-                {WSWAP_LPS.map(lp => (
-                  <SelectItem key={lp.address} value={lp.address}>
-                    {lp.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CardTitle>{title}</CardTitle>
+            {availableLPs.length > 1 && (
+              <Select value={selectedLP} onValueChange={setSelectedLP}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Filter by LP" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All LPs</SelectItem>
+                  {availableLPs.map(lp => (
+                    <SelectItem key={lp.address} value={lp.address}>
+                      {lp.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -199,8 +222,11 @@ export const WSwapTrades = () => {
                         </TableCell>
                         <TableCell>
                           <Badge 
-                            variant={trade.type === 'buy' ? 'default' : 'destructive'}
-                            className="gap-1"
+                            className={`gap-1 ${
+                              trade.type === 'buy' 
+                                ? 'bg-green-500/20 text-green-500 border-green-500/30 hover:bg-green-500/30' 
+                                : 'bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/30'
+                            }`}
                           >
                             {trade.type === 'buy' ? (
                               <ArrowUpRight className="h-3 w-3" />
@@ -213,7 +239,7 @@ export const WSwapTrades = () => {
                         <TableCell className="font-medium">
                           {trade.tokenSymbol}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className={trade.type === 'buy' ? 'text-green-500' : 'text-red-500'}>
                           {formatNumber(trade.amount, 4)}
                         </TableCell>
                         <TableCell>

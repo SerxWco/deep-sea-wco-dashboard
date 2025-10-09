@@ -4,7 +4,7 @@ import { WCHAIN_SCAN_API, WSWAP_LPS, MAIN_TOKEN, REFRESH_INTERVAL } from '@/conf
 import { WSwapTrade, WChainTokenTransaction, TradeStats } from '@/types/wswap';
 import { useWSwapReserves } from './useWSwapReserves';
 
-export const useWSwapTrades = (selectedLP: string = 'all') => {
+export const useWSwapTrades = (selectedLP: string = 'all', pairFilter?: string) => {
   const [trades, setTrades] = useState<WSwapTrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,15 +19,32 @@ export const useWSwapTrades = (selectedLP: string = 'all') => {
 
   const { getPrice, loading: reservesLoading } = useWSwapReserves();
 
-  const classifyTrade = (tx: WChainTokenTransaction): 'buy' | 'sell' => {
-    return tx.tokenSymbol === MAIN_TOKEN ? 'sell' : 'buy';
+  const classifyTrade = (tx: WChainTokenTransaction, lpAddress: string): 'buy' | 'sell' => {
+    const lp = WSWAP_LPS.find(l => l.address === lpAddress);
+    if (!lp) return 'buy';
+
+    // For WCO/WAVE pairs: WCO leaving LP = user buying WCO (selling WAVE)
+    // For WCO/WAVE pairs: WCO entering LP = user selling WCO (buying WAVE)
+    const isToken0 = tx.tokenSymbol === lp.token0;
+    const isLeavingLP = tx.from.toLowerCase() === lpAddress.toLowerCase();
+    
+    if (isToken0) {
+      return isLeavingLP ? 'buy' : 'sell';
+    } else {
+      return isLeavingLP ? 'sell' : 'buy';
+    }
   };
 
   const fetchTrades = async () => {
     if (reservesLoading) return;
 
     try {
-      const tradePromises = WSWAP_LPS.map(async (lp) => {
+      // Filter LPs based on pairFilter if provided
+      const filteredLPs = pairFilter 
+        ? WSWAP_LPS.filter(lp => lp.pair.includes(pairFilter))
+        : WSWAP_LPS;
+
+      const tradePromises = filteredLPs.map(async (lp) => {
         try {
           const response = await axios.get(
             `${WCHAIN_SCAN_API}?module=account&action=tokentx&address=${lp.address}`
@@ -35,7 +52,7 @@ export const useWSwapTrades = (selectedLP: string = 'all') => {
 
           if (response.data?.result && Array.isArray(response.data.result)) {
             return response.data.result.map((tx: WChainTokenTransaction) => {
-              const type = classifyTrade(tx);
+              const type = classifyTrade(tx, lp.address);
               const price = getPrice(lp.address, tx.tokenSymbol);
               const amount = Number(tx.value) / Math.pow(10, Number(tx.tokenDecimal));
 
@@ -63,6 +80,22 @@ export const useWSwapTrades = (selectedLP: string = 'all') => {
 
       const allTradesArrays = await Promise.all(tradePromises);
       let allTrades = allTradesArrays.flat();
+
+      // Deduplicate by hash - keep the token that's not WAVE for display
+      const tradesByHash = new Map<string, WSwapTrade>();
+      allTrades.forEach(trade => {
+        const existing = tradesByHash.get(trade.hash);
+        if (!existing) {
+          tradesByHash.set(trade.hash, trade);
+        } else {
+          // Prefer non-WAVE tokens for display
+          if (trade.tokenSymbol !== 'WAVE' && existing.tokenSymbol === 'WAVE') {
+            tradesByHash.set(trade.hash, trade);
+          }
+        }
+      });
+      
+      allTrades = Array.from(tradesByHash.values());
 
       // Sort by time (newest first)
       allTrades.sort((a, b) => b.timestamp - a.timestamp);
@@ -116,7 +149,7 @@ export const useWSwapTrades = (selectedLP: string = 'all') => {
     fetchTrades();
     const interval = setInterval(fetchTrades, REFRESH_INTERVAL);
     return () => clearInterval(interval);
-  }, [selectedLP, reservesLoading]);
+  }, [selectedLP, pairFilter, reservesLoading]);
 
   return {
     trades,
