@@ -30,6 +30,21 @@ export interface TradeStats {
   sellVolume24h: number;
 }
 
+export interface OHLCCandle {
+  timestamp: number;
+  time: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  buyVolume: number;
+  sellVolume: number;
+  trades: number;
+}
+
+export type TimeInterval = '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
+
 export interface WChainTokenTransaction {
   hash: string;
   timeStamp: string;

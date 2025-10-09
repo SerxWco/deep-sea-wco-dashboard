@@ -1,15 +1,16 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowUpRight, ArrowDownRight, RefreshCw, TrendingUp, Users, Wallet, Activity } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { ArrowUpRight, ArrowDownRight, TrendingUp, Users, Wallet, Activity } from 'lucide-react';
 import { useWSwapTrades } from '@/hooks/useWSwapTrades';
 import { WSWAP_LPS } from '@/config/wswap';
 import { formatNumber } from '@/utils/formatters';
-import { Button } from '@/components/ui/button';
+import { CandlestickChart } from '@/components/CandlestickChart';
+import { aggregateTradesIntoCandles } from '@/utils/ohlcAggregator';
+import { TimeInterval } from '@/types/wswap';
 
 interface WSwapTradesProps {
   pairFilter?: string;
@@ -18,6 +19,7 @@ interface WSwapTradesProps {
 
 export const WSwapTrades = ({ pairFilter, title = "W-Swap Live Trades" }: WSwapTradesProps) => {
   const [selectedLP, setSelectedLP] = useState<string>('all');
+  const [interval, setInterval] = useState<TimeInterval>('5m');
   const { trades, loading, error, stats, refetch } = useWSwapTrades(selectedLP, pairFilter);
   
   // Filter LPs based on pairFilter
@@ -25,15 +27,10 @@ export const WSwapTrades = ({ pairFilter, title = "W-Swap Live Trades" }: WSwapT
     ? WSWAP_LPS.filter(lp => lp.pair.includes(pairFilter))
     : WSWAP_LPS;
 
-  // Prepare chart data (last 20 trades for visualization)
-  const chartData = trades
-    .slice(0, 20)
-    .reverse()
-    .map(trade => ({
-      time: trade.time.toLocaleTimeString(),
-      amount: trade.amount,
-      type: trade.type
-    }));
+  // Generate OHLC candles from trades
+  const candles = useMemo(() => {
+    return aggregateTradesIntoCandles(trades, interval);
+  }, [trades, interval]);
 
   const StatCard = ({ icon: Icon, label, value, trend }: any) => (
     <Card className="glass-ocean hover-lift">
@@ -99,70 +96,15 @@ export const WSwapTrades = ({ pairFilter, title = "W-Swap Live Trades" }: WSwapT
         )}
       </div>
 
-      {/* Chart */}
-      <Card className="glass-ocean">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Trade Volume (Last 20)</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refetch}
-              disabled={loading}
-              className="gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <Skeleton className="h-64 w-full" />
-          ) : (
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis 
-                  dataKey="time" 
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
-                  }}
-                  labelStyle={{ color: 'hsl(var(--foreground))' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="amount"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  dot={(props) => {
-                    const trade = trades[19 - props.index];
-                    return (
-                      <circle
-                        cx={props.cx}
-                        cy={props.cy}
-                        r={4}
-                        fill={trade?.type === 'buy' ? 'hsl(142, 76%, 36%)' : 'hsl(0, 84%, 60%)'}
-                        stroke="none"
-                      />
-                    );
-                  }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+      {/* Candlestick Chart */}
+      <CandlestickChart
+        candles={candles}
+        interval={interval}
+        onIntervalChange={setInterval}
+        loading={loading}
+        onRefresh={refetch}
+        title="Price Action (OHLC)"
+      />
 
       {/* Trades Table */}
       <Card className="glass-ocean">
