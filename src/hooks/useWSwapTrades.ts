@@ -105,8 +105,8 @@ export const useWSwapTrades = (selectedLP: string = 'all', pairFilter?: string) 
         allTrades = allTrades.filter(trade => trade.lpAddress === selectedLP);
       }
 
-      // Take only the last 100 trades
-      allTrades = allTrades.slice(0, 100);
+      // Keep more trades for historical analysis (limit to 1000 for performance)
+      allTrades = allTrades.slice(0, 1000);
 
       setTrades(allTrades);
 
