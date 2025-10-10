@@ -18,7 +18,8 @@ import {
   ArrowUpRight,
   Coins,
   RefreshCw,
-  Flame
+  Flame,
+  UserCheck
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -85,7 +86,7 @@ export default function Dashboard() {
         </div>
 
         {/* Additional Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <CryptoMetricCard
             title="24h Volume"
             value={data ? formatCurrency(data.total_volume) : loading ? "Loading..." : "$0.00K"}
@@ -96,6 +97,16 @@ export default function Dashboard() {
             title="Total WCO Holders"
             value={holdersLoading ? "..." : formatNumber(totalHolders)}
             icon={<Users className="h-5 w-5" />}
+          />
+          
+          <CryptoMetricCard
+            title="Active Wallets (24h)"
+            value={networkStats ? formatNumber(networkStats.activeWallets) : networkLoading ? "..." : "N/A"}
+            change={networkStats && networkStats.networkActivityRate > 0 ? {
+              value: `${networkStats.networkActivityRate}% of holders`,
+              isPositive: true
+            } : undefined}
+            icon={<UserCheck className="h-5 w-5" />}
           />
         </div>
 
