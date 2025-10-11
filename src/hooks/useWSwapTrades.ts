@@ -23,8 +23,15 @@ export const useWSwapTrades = (selectedLP: string = 'all', pairFilter?: string) 
     const lp = WSWAP_LPS.find(l => l.address === lpAddress);
     if (!lp) return 'buy';
 
-    // For WCO/WAVE pairs: WCO leaving LP = user buying WCO (selling WAVE)
-    // For WCO/WAVE pairs: WCO entering LP = user selling WCO (buying WAVE)
+    // For WAVE token display perspective:
+    // WAVE leaving user's wallet (entering LP) = user selling WAVE for WCO = SELL
+    // WAVE entering user's wallet (leaving LP) = user buying WAVE with WCO = BUY
+    if (pairFilter === 'WAVE' && tx.tokenSymbol === 'WAVE') {
+      const isLeavingLP = tx.from.toLowerCase() === lpAddress.toLowerCase();
+      return isLeavingLP ? 'buy' : 'sell'; // LP sending WAVE to user = user buying WAVE
+    }
+
+    // For WCO/other tokens: WCO leaving LP = user buying WCO (selling other token)
     const isToken0 = tx.tokenSymbol === lp.token0;
     const isLeavingLP = tx.from.toLowerCase() === lpAddress.toLowerCase();
     
@@ -81,16 +88,22 @@ export const useWSwapTrades = (selectedLP: string = 'all', pairFilter?: string) 
       const allTradesArrays = await Promise.all(tradePromises);
       let allTrades = allTradesArrays.flat();
 
-      // Deduplicate by hash - keep the token that's not WAVE for display
+      // Deduplicate by hash - prefer WAVE tokens when filtering by WAVE, otherwise prefer non-WAVE
       const tradesByHash = new Map<string, WSwapTrade>();
       allTrades.forEach(trade => {
         const existing = tradesByHash.get(trade.hash);
         if (!existing) {
           tradesByHash.set(trade.hash, trade);
         } else {
-          // Prefer non-WAVE tokens for display
-          if (trade.tokenSymbol !== 'WAVE' && existing.tokenSymbol === 'WAVE') {
-            tradesByHash.set(trade.hash, trade);
+          // If filtering by WAVE, prefer WAVE tokens; otherwise prefer non-WAVE
+          if (pairFilter === 'WAVE') {
+            if (trade.tokenSymbol === 'WAVE' && existing.tokenSymbol !== 'WAVE') {
+              tradesByHash.set(trade.hash, trade);
+            }
+          } else {
+            if (trade.tokenSymbol !== 'WAVE' && existing.tokenSymbol === 'WAVE') {
+              tradesByHash.set(trade.hash, trade);
+            }
           }
         }
       });
@@ -114,7 +127,21 @@ export const useWSwapTrades = (selectedLP: string = 'all', pairFilter?: string) 
       const now = Date.now();
       const trades24h = allTrades.filter(t => now - t.timestamp * 1000 <= 24 * 60 * 60 * 1000);
       
-      const uniqueWallets = new Set(trades24h.map(t => t.from)).size;
+      // Count unique user wallets (exclude LP contracts)
+      const lpAddresses = filteredLPs.map(lp => lp.address.toLowerCase());
+      const uniqueWallets = new Set(
+        trades24h
+          .map(t => {
+            // Get the wallet address that's NOT the LP contract
+            const fromIsLP = lpAddresses.includes(t.from.toLowerCase());
+            const toIsLP = lpAddresses.includes(t.to.toLowerCase());
+            
+            if (fromIsLP && !toIsLP) return t.to.toLowerCase();
+            if (toIsLP && !fromIsLP) return t.from.toLowerCase();
+            return null;
+          })
+          .filter(addr => addr !== null)
+      ).size;
       const buyTrades = trades24h.filter(t => t.type === 'buy');
       const sellTrades = trades24h.filter(t => t.type === 'sell');
       

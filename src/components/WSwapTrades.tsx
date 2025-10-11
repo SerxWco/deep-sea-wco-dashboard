@@ -84,7 +84,7 @@ export const WSwapTrades = ({ pairFilter, title = "W-Swap Live Trades" }: WSwapT
             <StatCard
               icon={Activity}
               label="24h Volume"
-              value={`${formatNumber(stats.totalVolume24h, 2)} ${pairFilter === 'WAVE' ? 'WCO' : 'Tokens'}`}
+              value={`${formatNumber(stats.totalVolume24h, 2)} ${pairFilter === 'WAVE' ? 'WAVE' : pairFilter || 'Tokens'}`}
             />
             <StatCard
               icon={TrendingUp}
