@@ -19,26 +19,51 @@ const ERC20_ABI = [
   'function name() view returns (string)'
 ];
 
-const W_CHAIN_RPC = 'https://mainnet-rpc.w-chain.com';
+const W_CHAIN_RPC = 'https://rpc.w-chain.com';
 
 // Alternative RPC endpoints to try
 const BACKUP_RPCS = [
-  'https://rpc.w-chain.com',
+  'https://mainnet-rpc.w-chain.com',  // Old endpoint as backup
   'https://mainnet.w-chain.com',
   'https://rpc-mainnet.w-chain.com',
   'https://node.w-chain.com',
 ];
 
-// Function to find working RPC
+// Cache for working RPC endpoint
+let cachedRPC: { url: string; timestamp: number } | null = null;
+const RPC_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Function to find working RPC with timeout and caching
 const findWorkingRPC = async (): Promise<string | null> => {
+  // Check cache first
+  if (cachedRPC && Date.now() - cachedRPC.timestamp < RPC_CACHE_DURATION) {
+    console.log(`Using cached RPC: ${cachedRPC.url}`);
+    return cachedRPC.url;
+  }
+
   const allEndpoints = [W_CHAIN_RPC, ...BACKUP_RPCS];
   
   for (const rpcUrl of allEndpoints) {
     try {
       console.log(`Testing RPC endpoint: ${rpcUrl}`);
       const provider = new ethers.JsonRpcProvider(rpcUrl);
-      await provider.getBlockNumber();
+      
+      // Add 5 second timeout
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 5000)
+      );
+      
+      // Use lighter call (getNetwork is faster than getBlockNumber)
+      await Promise.race([
+        provider.getNetwork(),
+        timeoutPromise
+      ]);
+      
       console.log(`✅ Working RPC found: ${rpcUrl}`);
+      
+      // Cache the working RPC
+      cachedRPC = { url: rpcUrl, timestamp: Date.now() };
+      
       return rpcUrl;
     } catch (error) {
       console.log(`❌ RPC failed: ${rpcUrl}`, error);
