@@ -1,6 +1,12 @@
 import { Card } from "@/components/ui/card";
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface CryptoMetricCardProps {
   title: string;
@@ -11,6 +17,7 @@ interface CryptoMetricCardProps {
   };
   icon?: React.ReactNode;
   className?: string;
+  tooltip?: string;
 }
 
 export function CryptoMetricCard({ 
@@ -18,7 +25,8 @@ export function CryptoMetricCard({
   value, 
   change, 
   icon, 
-  className 
+  className,
+  tooltip
 }: CryptoMetricCardProps) {
   return (
     <Card className={cn(
@@ -26,9 +34,23 @@ export function CryptoMetricCard({
       className
     )}>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          {title}
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            {title}
+          </h3>
+          {tooltip && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-muted-foreground cursor-help transition-colors" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-sm">{tooltip}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
         {icon && (
           <div className="text-accent">
             {icon}

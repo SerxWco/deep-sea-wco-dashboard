@@ -70,6 +70,7 @@ export default function Dashboard() {
                 isPositive: data.price_change_percentage_24h >= 0 
               } : undefined}
               icon={<DollarSign className="h-5 w-5" />}
+              tooltip="Current market price of WCO tokens, updated in real-time from exchange data."
             />
             
             <CryptoMetricCard
@@ -80,12 +81,14 @@ export default function Dashboard() {
                 isPositive: data.price_change_24h >= 0 
               } : undefined}
               icon={<TrendingUp className="h-5 w-5" />}
+              tooltip="Percentage and dollar amount change in WCO price over the last 24 hours."
             />
             
             <CryptoMetricCard
               title="Market Cap"
               value={data ? formatCurrency(data.market_cap) : loading ? "Loading..." : "$0.00M"}
               icon={<BarChart3 className="h-5 w-5" />}
+              tooltip="Total market value of all circulating WCO tokens, calculated by multiplying the current price by circulating supply."
             />
           </div>
         </div>
@@ -96,12 +99,14 @@ export default function Dashboard() {
             title="24h Volume"
             value={data ? formatCurrency(data.total_volume) : loading ? "Loading..." : "$0.00K"}
             icon={<Activity className="h-5 w-5" />}
+            tooltip="Total dollar value of all WCO tokens traded across all exchanges in the last 24 hours."
           />
           
           <CryptoMetricCard
             title="Total WCO Holders"
             value={holdersLoading ? "..." : formatNumber(totalHolders)}
             icon={<Users className="h-5 w-5" />}
+            tooltip="Total number of unique wallet addresses currently holding WCO tokens on the W-Chain blockchain."
           />
           
           <CryptoMetricCard
@@ -112,6 +117,7 @@ export default function Dashboard() {
               isPositive: true
             } : undefined}
             icon={<UserCheck className="h-5 w-5" />}
+            tooltip="Unique wallet addresses that have made at least one transaction in the last 24 hours. The activity rate shows what percentage of total holders were active."
           />
         </div>
 
@@ -130,12 +136,14 @@ export default function Dashboard() {
               isPositive: true
             } : undefined}
             icon={<Coins className="h-5 w-5" />}
+            tooltip="The amount of WCO tokens currently in circulation and available for trading, excluding burned tokens and those locked in contracts."
           />
           
           <CryptoMetricCard
             title="24h Transactions"
             value={networkStats ? formatExactNumber(networkStats.transactions24h) : networkLoading ? "..." : "N/A"}
             icon={<ArrowUpRight className="h-5 w-5" />}
+            tooltip="Total number of on-chain transactions involving WCO tokens in the last 24 hours."
           />
           
           <CryptoMetricCard
@@ -146,18 +154,21 @@ export default function Dashboard() {
               isPositive: burnData.change24h > 0
             } : undefined}
             icon={<Flame className="h-5 w-5" />}
+            tooltip="Total amount of WCO tokens permanently removed from circulation through burning mechanisms. Burning reduces supply and can increase scarcity."
           />
           
           <CryptoMetricCard
             title="24h WCO Moved"
             value={networkStats ? `${formatNumber(networkStats.wcoMoved24h)} WCO` : networkLoading ? "..." : "N/A"}
             icon={<Coins className="h-5 w-5" />}
+            tooltip="Total volume of WCO tokens transferred between wallets in the last 24 hours, indicating network activity."
           />
           
           <CryptoMetricCard
             title="Avg Transaction Size"
             value={networkStats ? `${networkStats.averageTransactionSize} WCO` : networkLoading ? "..." : "N/A"}
             icon={<BarChart3 className="h-5 w-5" />}
+            tooltip="Average amount of WCO tokens transferred per transaction in the last 24 hours."
           />
         </div>
       </div>
