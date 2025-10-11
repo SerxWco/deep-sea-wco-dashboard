@@ -43,9 +43,14 @@ export default function Dashboard() {
               <RefreshCw className="h-5 w-5 text-accent animate-spin" />
             )}
           </div>
-          <p className="text-muted-foreground">
-            {(error || networkError || burnError || supplyError || priceError) ? "Unable to fetch live data - showing cached values" : "Live crypto analytics and ocean creature ecosystem"}
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <p className="text-muted-foreground">
+              {(error || networkError || burnError || supplyError || priceError) ? "Unable to fetch live data - showing cached values" : "Live crypto analytics and ocean creature ecosystem"}
+            </p>
+            <p className="text-sm text-muted-foreground/70">
+              Last updated: {new Date().toLocaleTimeString()}
+            </p>
+          </div>
         </div>
 
         {/* Hero Section - Bubbles + Key Metrics */}

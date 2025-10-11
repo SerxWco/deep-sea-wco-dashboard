@@ -70,9 +70,10 @@ export const WSwapTrades = ({ pairFilter, title = "W-Swap Live Trades" }: WSwapT
   return (
     <div className="space-y-6">
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {loading ? (
           <>
+            <Skeleton className="h-24" />
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
@@ -99,6 +100,12 @@ export const WSwapTrades = ({ pairFilter, title = "W-Swap Live Trades" }: WSwapT
               icon={Wallet}
               label="Largest Trade"
               value={stats.largestTrade24h ? `${formatNumber(stats.largestTrade24h.amount, 2)}` : 'N/A'}
+            />
+            <StatCard
+              icon={TrendingUp}
+              label="Buy/Sell Ratio"
+              value={stats.sellVolume24h > 0 ? `${(stats.buyVolume24h / stats.sellVolume24h).toFixed(2)}` : 'N/A'}
+              trend={stats.buyVolume24h > stats.sellVolume24h ? 'More buying' : stats.sellVolume24h > stats.buyVolume24h ? 'More selling' : 'Balanced'}
             />
           </>
         )}
@@ -143,8 +150,9 @@ export const WSwapTrades = ({ pairFilter, title = "W-Swap Live Trades" }: WSwapT
           {loading ? (
             <Skeleton className="h-80 w-full" />
           ) : chartData.length === 0 ? (
-            <div className="h-80 flex items-center justify-center text-muted-foreground">
-              No trades in selected time range
+            <div className="h-80 flex flex-col items-center justify-center text-center">
+              <p className="text-muted-foreground mb-2">No trades found in the selected time range</p>
+              <p className="text-sm text-muted-foreground/70">Try selecting a longer time range or check back later</p>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={320}>
