@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.refresh-leaderboard-cache]
 verify_jwt = false
+
+[functions.telegram-bot]
+verify_jwt = false
