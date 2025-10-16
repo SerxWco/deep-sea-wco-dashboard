@@ -14,6 +14,7 @@ import WSwap from "./pages/WSwap";
 import WcoInfo from "./pages/WcoInfo";
 import KrakenWatchlistPage from "./pages/KrakenWatchlist";
 import AdminKnowledge from "./pages/AdminKnowledge";
+import AdminCache from "./pages/AdminCache";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -85,6 +86,11 @@ const App = () => (
           <Route path="/admin/knowledge" element={
             <DashboardLayout>
               <AdminKnowledge />
+            </DashboardLayout>
+          } />
+          <Route path="/admin/cache" element={
+            <DashboardLayout>
+              <AdminCache />
             </DashboardLayout>
           } />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -140,11 +140,17 @@ Deno.serve(async (req) => {
     console.log('Starting leaderboard cache refresh...');
 
     // Update metadata to indicate refresh in progress
-    await supabase.from('wallet_cache_metadata').insert({
-      total_holders: 0,
-      refresh_status: 'in_progress',
-      last_refresh: new Date().toISOString(),
-    });
+    const { error: metaError } = await supabase.from('wallet_cache_metadata')
+      .upsert({
+        id: '00000000-0000-0000-0000-000000000001',
+        total_holders: 0,
+        refresh_status: 'in_progress',
+        last_refresh: new Date().toISOString(),
+      }, { onConflict: 'id' });
+    
+    if (metaError) {
+      console.error('Error updating metadata:', metaError);
+    }
 
     // Fetch all wallets from W-Chain API
     const wallets = await fetchAllWallets();
@@ -176,11 +182,17 @@ Deno.serve(async (req) => {
     }
 
     // Update metadata with final count
-    await supabase.from('wallet_cache_metadata').insert({
-      total_holders: wallets.length,
-      refresh_status: 'completed',
-      last_refresh: new Date().toISOString(),
-    });
+    const { error: finalMetaError } = await supabase.from('wallet_cache_metadata')
+      .upsert({
+        id: '00000000-0000-0000-0000-000000000001',
+        total_holders: wallets.length,
+        refresh_status: 'completed',
+        last_refresh: new Date().toISOString(),
+      }, { onConflict: 'id' });
+    
+    if (finalMetaError) {
+      console.error('Error updating final metadata:', finalMetaError);
+    }
 
     console.log(`Cache refresh completed: ${wallets.length} wallets cached`);
 
