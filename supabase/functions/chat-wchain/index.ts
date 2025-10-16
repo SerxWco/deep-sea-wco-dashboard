@@ -1607,7 +1607,7 @@ async function executeGetTotalHoldersFromCache() {
     console.log('⚠️ Cache empty/error, trying GraphQL (fast path)...');
     
     // STEP 2: Try GraphQL API (same as Dashboard fast path)
-    const graphqlAddresses = await queryGraphQL(10000);
+    const graphqlAddresses = await queryGraphQL(5000);
     if (graphqlAddresses && graphqlAddresses.length > 0) {
       console.log(`✅ GraphQL success: ${graphqlAddresses.length} wallets`);
       return {
@@ -1619,35 +1619,64 @@ async function executeGetTotalHoldersFromCache() {
     
     console.log('⚠️ GraphQL failed, falling back to REST API pagination...');
     
-    // STEP 3: Paginate REST API (same as Dashboard final fallback)
+    // STEP 3: Paginate REST API (exact same logic as Dashboard)
+    const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
+    let url = `${baseUrl}?items_count=100`;
+    let keepFetching = true;
+    let pageCount = 0;
+    const maxPages = 50;
     const allWallets = [];
-    const ITEMS_PER_PAGE = 50;
-    let currentPage = 1;
-    let hasMore = true;
     
-    while (hasMore && currentPage <= 100) { // Safety limit at 5000 wallets
+    while (keepFetching && pageCount < maxPages) {
       try {
-        const pageData = await fetchAPI(
-          `/addresses?page=${currentPage}&items_count=${ITEMS_PER_PAGE}`,
-          30000 // 30s cache
-        );
+        console.log(`📄 Fetching page ${pageCount + 1}...`);
+        const response = await fetch(url);
         
-        if (!pageData?.items || pageData.items.length === 0) {
-          hasMore = false;
+        if (!response.ok) {
+          console.error(`HTTP error! status: ${response.status}`);
           break;
         }
         
-        allWallets.push(...pageData.items);
-        console.log(`📄 Page ${currentPage}: ${pageData.items.length} wallets (total: ${allWallets.length})`);
+        const result = await response.json();
         
-        hasMore = pageData.next_page_params !== null;
-        currentPage++;
+        if (!result?.items || !Array.isArray(result.items) || result.items.length === 0) {
+          console.log('No more data from API');
+          break;
+        }
+        
+        // Filter and process wallets like the frontend does
+        const processedWallets = result.items
+          .filter((account: any) => account?.hash && typeof account.hash === 'string')
+          .map((account: any) => {
+            const balanceWei = parseFloat(account.coin_balance) || 0;
+            const balance = balanceWei / 1e18;
+            return {
+              address: account.hash,
+              balance,
+              txCount: parseInt(account.transaction_count || account.tx_count) || 0,
+            };
+          });
+        
+        allWallets.push(...processedWallets);
+        pageCount++;
+        
+        console.log(`📄 Page ${pageCount}: ${processedWallets.length} wallets (total: ${allWallets.length})`);
+        
+        // Use next_page_params for pagination (same as frontend)
+        if (result.next_page_params) {
+          const params = new URLSearchParams(result.next_page_params).toString();
+          url = `${baseUrl}?items_count=100&${params}`;
+        } else {
+          keepFetching = false;
+        }
         
         // Small delay to avoid rate limiting
-        if (hasMore) await new Promise(resolve => setTimeout(resolve, 50));
+        if (keepFetching && pageCount < maxPages) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
       } catch (pageError) {
-        console.error(`Page ${currentPage} failed:`, pageError);
-        hasMore = false;
+        console.error(`Page ${pageCount + 1} failed:`, pageError);
+        break;
       }
     }
     
@@ -1657,7 +1686,7 @@ async function executeGetTotalHoldersFromCache() {
         totalHolders: allWallets.length,
         source: 'rest-api-paginated',
         note: 'Data from paginated REST API (Dashboard fallback #2)',
-        pages_fetched: currentPage - 1
+        pages_fetched: pageCount
       };
     }
     
@@ -1683,57 +1712,124 @@ async function executeGetTotalHoldersFromCache() {
 // Execute get category stats
 async function executeGetCategoryStats() {
   try {
-    const { data: holders, error } = await supabase
+    console.log('🔍 Fetching category stats using three-tier fallback...');
+    
+    // STEP 1: Try Supabase cache first
+    const { data: cachedHolders, error: cacheError } = await supabase
       .from('wallet_leaderboard_cache')
       .select('category, emoji, balance');
     
-    if (error) throw error;
-    
-    if (!holders || holders.length === 0) {
-      return { 
-        error: "Category statistics are not available from cache yet. The wallet cache is currently being refreshed. Please try asking for 'total holders' instead, which uses live API data as fallback." 
-      };
+    if (!cacheError && cachedHolders && cachedHolders.length > 0) {
+      console.log(`✅ Cache hit: ${cachedHolders.length} wallets from Supabase`);
+      return calculateCategoryStats(cachedHolders, 'wallet_leaderboard_cache');
     }
     
-    // Calculate stats per category
-    const categoryMap: Record<string, { count: number; totalBalance: number; emoji: string }> = {};
-    let grandTotal = 0;
+    console.log('⚠️ Cache empty/error, trying GraphQL...');
     
-    holders.forEach(h => {
-      const balance = Number(h.balance);
-      grandTotal += balance;
-      
-      if (!categoryMap[h.category]) {
-        categoryMap[h.category] = { count: 0, totalBalance: 0, emoji: h.emoji };
+    // STEP 2: Try GraphQL API
+    const graphqlAddresses = await queryGraphQL(5000);
+    if (graphqlAddresses && graphqlAddresses.length > 0) {
+      console.log(`✅ GraphQL success: ${graphqlAddresses.length} wallets`);
+      const categorizedWallets = graphqlAddresses.map(addr => {
+        const { category, emoji } = categorizeWallet(addr.balance, addr.address);
+        return { category, emoji, balance: addr.balance };
+      });
+      return calculateCategoryStats(categorizedWallets, 'graphql-api');
+    }
+    
+    console.log('⚠️ GraphQL failed, falling back to REST API...');
+    
+    // STEP 3: REST API pagination
+    const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
+    let url = `${baseUrl}?items_count=100`;
+    let keepFetching = true;
+    let pageCount = 0;
+    const maxPages = 50;
+    const allWallets = [];
+    
+    while (keepFetching && pageCount < maxPages) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) break;
+        
+        const result = await response.json();
+        if (!result?.items || result.items.length === 0) break;
+        
+        const processedWallets = result.items
+          .filter((account: any) => account?.hash)
+          .map((account: any) => {
+            const balance = (parseFloat(account.coin_balance) || 0) / 1e18;
+            const { category, emoji } = categorizeWallet(balance, account.hash);
+            return { category, emoji, balance };
+          });
+        
+        allWallets.push(...processedWallets);
+        pageCount++;
+        
+        if (result.next_page_params) {
+          const params = new URLSearchParams(result.next_page_params).toString();
+          url = `${baseUrl}?items_count=100&${params}`;
+        } else {
+          keepFetching = false;
+        }
+        
+        if (keepFetching && pageCount < maxPages) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      } catch (error) {
+        console.error(`Page ${pageCount + 1} failed:`, error);
+        break;
       }
-      categoryMap[h.category].count++;
-      categoryMap[h.category].totalBalance += balance;
-    });
+    }
     
-    // Sort by balance threshold (Kraken to Plankton)
-    const categoryOrder = ["Kraken", "Whale", "Shark", "Dolphin", "Fish", "Octopus", "Crab", "Shrimp", "Plankton"];
-    const stats = categoryOrder
-      .filter(cat => categoryMap[cat])
-      .map(category => ({
-        category: `${category} ${categoryMap[category].emoji}`,
-        holders: categoryMap[category].count,
-        totalWCO: categoryMap[category].totalBalance.toLocaleString('en-US', { maximumFractionDigits: 2 }),
-        percentOfHolders: ((categoryMap[category].count / holders.length) * 100).toFixed(2) + '%',
-        percentOfSupply: ((categoryMap[category].totalBalance / grandTotal) * 100).toFixed(2) + '%',
-        avgBalance: (categoryMap[category].totalBalance / categoryMap[category].count).toLocaleString('en-US', { maximumFractionDigits: 2 })
-      }));
+    if (allWallets.length > 0) {
+      console.log(`✅ REST pagination complete: ${allWallets.length} wallets`);
+      return calculateCategoryStats(allWallets, 'rest-api-paginated');
+    }
     
-    return {
-      statistics: stats,
-      totalHolders: holders.length,
-      totalWCOInWallets: grandTotal.toLocaleString('en-US', { maximumFractionDigits: 2 }),
-      source: "Supabase cache (same as Ocean Creatures distribution)",
-      note: "These are the 9 Ocean Creature tiers based on WCO balance thresholds"
-    };
+    return { error: "Failed to fetch category statistics from all sources" };
   } catch (error) {
     console.error('Category stats error:', error);
     return { error: `Failed to get category stats: ${error instanceof Error ? error.message : String(error)}` };
   }
+}
+
+// Helper function to calculate category statistics
+function calculateCategoryStats(holders: Array<{category: string, emoji: string, balance: number}>, source: string) {
+  const categoryMap: Record<string, { count: number; totalBalance: number; emoji: string }> = {};
+  let grandTotal = 0;
+  
+  holders.forEach(h => {
+    const balance = Number(h.balance);
+    grandTotal += balance;
+    
+    if (!categoryMap[h.category]) {
+      categoryMap[h.category] = { count: 0, totalBalance: 0, emoji: h.emoji };
+    }
+    categoryMap[h.category].count++;
+    categoryMap[h.category].totalBalance += balance;
+  });
+  
+  // Sort by balance threshold (Kraken to Plankton)
+  const categoryOrder = ["Kraken", "Whale", "Shark", "Dolphin", "Fish", "Octopus", "Crab", "Shrimp", "Plankton"];
+  const stats = categoryOrder
+    .filter(cat => categoryMap[cat])
+    .map(category => ({
+      category: `${category} ${categoryMap[category].emoji}`,
+      holders: categoryMap[category].count,
+      totalWCO: categoryMap[category].totalBalance.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+      percentOfHolders: ((categoryMap[category].count / holders.length) * 100).toFixed(2) + '%',
+      percentOfSupply: ((categoryMap[category].totalBalance / grandTotal) * 100).toFixed(2) + '%',
+      avgBalance: (categoryMap[category].totalBalance / categoryMap[category].count).toLocaleString('en-US', { maximumFractionDigits: 2 })
+    }));
+  
+  return {
+    statistics: stats,
+    totalHolders: holders.length,
+    totalWCOInWallets: grandTotal.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+    source,
+    note: "These are the 9 Ocean Creature tiers based on WCO balance thresholds"
+  };
 }
 
 // Execute get wallets by category
