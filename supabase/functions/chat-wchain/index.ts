@@ -1087,36 +1087,39 @@ async function executeGetHolderDistribution() {
     
     console.log('⚠️ GraphQL failed, falling back to REST API pagination...');
     
-    // STEP 3: Fall back to REST API pagination (slowest but most reliable)
+    // STEP 3: REST API pagination (matching frontend logic exactly)
+    const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
+    let url = `${baseUrl}?items_count=100`;
+    let keepFetching = true;
+    let pageCount = 0;
+    const maxPages = 50;
     const allWallets = [];
-    const ITEMS_PER_PAGE = 50;
-    let currentPage = 1;
-    let hasMore = true;
-    const maxPages = 100; // Safety limit: 5000 wallets max
     
-    while (hasMore && currentPage <= maxPages && allWallets.length < 5000) {
+    while (keepFetching && pageCount < maxPages) {
       try {
-        const pageData = await fetchAPI(
-          `/addresses?page=${currentPage}&items_count=${ITEMS_PER_PAGE}`,
-          30000 // 30s cache
-        );
+        const response = await fetch(url);
+        if (!response.ok) break;
         
-        if (!pageData?.items || pageData.items.length === 0) {
-          hasMore = false;
-          break;
+        const result = await response.json();
+        if (!result?.items || result.items.length === 0) break;
+        
+        allWallets.push(...result.items);
+        pageCount++;
+        console.log(`📄 Page ${pageCount}: ${result.items.length} wallets (total: ${allWallets.length})`);
+        
+        if (result.next_page_params) {
+          const params = new URLSearchParams(result.next_page_params).toString();
+          url = `${baseUrl}?items_count=100&${params}`;
+        } else {
+          keepFetching = false;
         }
         
-        allWallets.push(...pageData.items);
-        console.log(`📄 Page ${currentPage}: ${pageData.items.length} wallets (total: ${allWallets.length})`);
-        
-        hasMore = pageData.next_page_params !== null;
-        currentPage++;
-        
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (pageError) {
-        console.error(`Error fetching page ${currentPage}:`, pageError);
-        hasMore = false;
+        if (keepFetching && pageCount < maxPages) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      } catch (error) {
+        console.error(`Page ${pageCount + 1} failed:`, error);
+        break;
       }
     }
     
