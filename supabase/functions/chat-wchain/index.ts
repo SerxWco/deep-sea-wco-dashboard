@@ -912,9 +912,112 @@ async function executeGetTopHolders(args: any) {
       };
     }
     
-    console.log('⚠️ Cache empty/error, returning not-available message...');
+    console.log('⚠️ Cache empty/error, trying GraphQL (fast path)...');
+    
+    // STEP 2: Try GraphQL API as fallback
+    const graphqlAddresses = await queryGraphQL(5000);
+    if (graphqlAddresses && graphqlAddresses.length > 0) {
+      console.log(`✅ GraphQL success: ${graphqlAddresses.length} wallets`);
+      
+      // Process and categorize wallets
+      const processed = graphqlAddresses.map((item: any) => {
+        const balance = parseFloat(item.coinBalance || '0') / 1e18;
+        const category = categorizeWallet(balance, item.hash);
+        return {
+          address: item.hash,
+          balance: balance,
+          category: `${category.category} ${category.emoji}`,
+          categoryName: category.category,
+          transactionCount: item.transactionsCount || 0
+        };
+      });
+      
+      // Filter by category if requested
+      let filtered = processed;
+      if (categoryFilter) {
+        filtered = processed.filter(w => 
+          w.categoryName.toLowerCase().includes(categoryFilter)
+        );
+      }
+      
+      return {
+        holders: filtered.slice(0, requestedLimit),
+        total: filtered.length,
+        source: 'graphql-api'
+      };
+    }
+    
+    console.log('⚠️ GraphQL failed, falling back to REST API pagination...');
+    
+    // STEP 3: Fall back to REST API pagination (slowest but most reliable)
+    const allWallets = [];
+    const ITEMS_PER_PAGE = 50;
+    let currentPage = 1;
+    let hasMore = true;
+    const maxPages = 100; // Safety limit: 5000 wallets max
+    
+    while (hasMore && currentPage <= maxPages && allWallets.length < 5000) {
+      try {
+        const pageData = await fetchAPI(
+          `/addresses?page=${currentPage}&items_count=${ITEMS_PER_PAGE}`,
+          30000 // 30s cache
+        );
+        
+        if (!pageData?.items || pageData.items.length === 0) {
+          hasMore = false;
+          break;
+        }
+        
+        allWallets.push(...pageData.items);
+        console.log(`📄 Page ${currentPage}: ${pageData.items.length} wallets (total: ${allWallets.length})`);
+        
+        hasMore = pageData.next_page_params !== null;
+        currentPage++;
+        
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (pageError) {
+        console.error(`Error fetching page ${currentPage}:`, pageError);
+        hasMore = false;
+      }
+    }
+    
+    if (allWallets.length === 0) {
+      return {
+        error: 'Unable to fetch wallet data from any source. Please try again later.'
+      };
+    }
+    
+    console.log(`✅ REST pagination complete: ${allWallets.length} wallets`);
+    
+    // Process and categorize wallets
+    const processed = allWallets.map((item: any) => {
+      const balance = parseFloat(item.coin_balance || '0') / 1e18;
+      const category = categorizeWallet(balance, item.hash);
+      return {
+        address: item.hash,
+        balance: balance,
+        category: `${category.category} ${category.emoji}`,
+        categoryName: category.category,
+        transactionCount: item.tx_count || 0
+      };
+    });
+    
+    // Filter by category if requested
+    let filtered = processed;
+    if (categoryFilter) {
+      filtered = processed.filter(w => 
+        w.categoryName.toLowerCase().includes(categoryFilter)
+      );
+    }
+    
+    // Sort by balance descending
+    filtered.sort((a, b) => b.balance - a.balance);
+    
     return {
-      error: 'Top holders are not available from the Ocean Leaderboard cache yet. The wallet cache is currently being refreshed. Please try again shortly.'
+      holders: filtered.slice(0, requestedLimit),
+      total: filtered.length,
+      source: 'rest-api-pagination'
     };
     
   } catch (error) {
@@ -925,22 +1028,112 @@ async function executeGetTopHolders(args: any) {
 
 async function executeGetHolderDistribution() {
   try {
+    // STEP 1: Try Supabase cache first (fast path)
     const { data: holders, error } = await supabase
       .from('wallet_leaderboard_cache')
       .select('category, emoji');
     
-    if (error) throw error;
-    
-    if (!holders || holders.length === 0) {
+    if (!error && holders && holders.length > 0) {
+      console.log(`✅ Cache hit: ${holders.length} holders for distribution`);
+      
+      // Count by category from cache
+      const dist: Record<string, number> = {};
+      holders.forEach(h => {
+        const key = `${h.category} ${h.emoji}`;
+        dist[key] = (dist[key] || 0) + 1;
+      });
+      
       return {
-        error: 'Holder distribution is not available from the Ocean Leaderboard cache yet. The wallet cache is currently being refreshed. Please try again shortly.'
+        distribution: Object.entries(dist)
+          .map(([category, count]) => ({
+            category,
+            count,
+            percentage: ((count / holders.length) * 100).toFixed(2)
+          }))
+          .sort((a, b) => b.count - a.count),
+        totalHolders: holders.length,
+        source: 'wallet_leaderboard_cache'
       };
     }
     
-    // Count by category from cache
+    console.log('⚠️ Cache empty/error, trying GraphQL (fast path)...');
+    
+    // STEP 2: Try GraphQL API as fallback
+    const graphqlAddresses = await queryGraphQL(5000);
+    if (graphqlAddresses && graphqlAddresses.length > 0) {
+      console.log(`✅ GraphQL success: ${graphqlAddresses.length} wallets`);
+      
+      // Categorize all wallets
+      const dist: Record<string, number> = {};
+      graphqlAddresses.forEach((item: any) => {
+        const balance = parseFloat(item.coinBalance || '0') / 1e18;
+        const category = categorizeWallet(balance, item.hash);
+        const key = `${category.category} ${category.emoji}`;
+        dist[key] = (dist[key] || 0) + 1;
+      });
+      
+      return {
+        distribution: Object.entries(dist)
+          .map(([category, count]) => ({
+            category,
+            count,
+            percentage: ((count / graphqlAddresses.length) * 100).toFixed(2)
+          }))
+          .sort((a, b) => b.count - a.count),
+        totalHolders: graphqlAddresses.length,
+        source: 'graphql-api'
+      };
+    }
+    
+    console.log('⚠️ GraphQL failed, falling back to REST API pagination...');
+    
+    // STEP 3: Fall back to REST API pagination (slowest but most reliable)
+    const allWallets = [];
+    const ITEMS_PER_PAGE = 50;
+    let currentPage = 1;
+    let hasMore = true;
+    const maxPages = 100; // Safety limit: 5000 wallets max
+    
+    while (hasMore && currentPage <= maxPages && allWallets.length < 5000) {
+      try {
+        const pageData = await fetchAPI(
+          `/addresses?page=${currentPage}&items_count=${ITEMS_PER_PAGE}`,
+          30000 // 30s cache
+        );
+        
+        if (!pageData?.items || pageData.items.length === 0) {
+          hasMore = false;
+          break;
+        }
+        
+        allWallets.push(...pageData.items);
+        console.log(`📄 Page ${currentPage}: ${pageData.items.length} wallets (total: ${allWallets.length})`);
+        
+        hasMore = pageData.next_page_params !== null;
+        currentPage++;
+        
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (pageError) {
+        console.error(`Error fetching page ${currentPage}:`, pageError);
+        hasMore = false;
+      }
+    }
+    
+    if (allWallets.length === 0) {
+      return {
+        error: 'Unable to fetch wallet data from any source. Please try again later.'
+      };
+    }
+    
+    console.log(`✅ REST pagination complete: ${allWallets.length} wallets`);
+    
+    // Categorize all wallets
     const dist: Record<string, number> = {};
-    holders.forEach(h => {
-      const key = `${h.category} ${h.emoji}`;
+    allWallets.forEach((item: any) => {
+      const balance = parseFloat(item.coin_balance || '0') / 1e18;
+      const category = categorizeWallet(balance, item.hash);
+      const key = `${category.category} ${category.emoji}`;
       dist[key] = (dist[key] || 0) + 1;
     });
     
@@ -949,13 +1142,14 @@ async function executeGetHolderDistribution() {
         .map(([category, count]) => ({
           category,
           count,
-          percentage: ((count / holders.length) * 100).toFixed(2)
+          percentage: ((count / allWallets.length) * 100).toFixed(2)
         }))
         .sort((a, b) => b.count - a.count),
-      totalHolders: holders.length,
-      source: 'cache'
+      totalHolders: allWallets.length,
+      source: 'rest-api-pagination'
     };
   } catch (error) {
+    console.error('❌ Get holder distribution failed:', error);
     return { error: `Failed to get holder distribution: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
