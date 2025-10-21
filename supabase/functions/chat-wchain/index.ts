@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -2327,14 +2328,43 @@ async function executeGetWSwapPools() {
   }
 }
 
+// Request validation schema
+const requestSchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(['user', 'assistant', 'system']),
+    content: z.string().min(1).max(10000)
+  })).min(1).max(50),
+  conversationId: z.string().uuid().optional(),
+  sessionId: z.string().min(1).max(100),
+  userId: z.string().uuid().optional()
+});
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messages, conversationId, sessionId, userId } = await req.json();
-    console.log('Received messages:', messages.length, 'conversationId:', conversationId, 'sessionId:', sessionId, 'userId:', userId);
+    // Parse and validate request body
+    const rawBody = await req.json();
+    const validationResult = requestSchema.safeParse(rawBody);
+    
+    if (!validationResult.success) {
+      console.error('❌ Request validation failed:', validationResult.error.errors);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid request data',
+          details: validationResult.error.errors 
+        }), 
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+    
+    const { messages, conversationId, sessionId, userId } = validationResult.data;
+    console.log('✅ Validated request - messages:', messages.length, 'conversationId:', conversationId, 'sessionId:', sessionId, 'userId:', userId);
     
     // Handle conversation memory
     let finalConversationId = conversationId;
