@@ -40,9 +40,10 @@ const calculatePnL = (currentValue: number, pastValue: number) => {
 
 export const usePortfolioPnL = (
   balances: TokenBalance[], 
-  walletAddress: string | null
+  walletAddress: string | null,
+  userId: string | null
 ): UsePortfolioPnLReturn => {
-  const { snapshots, loading, error } = usePortfolioHistory(walletAddress);
+  const { snapshots, loading, error } = usePortfolioHistory(walletAddress, userId);
 
   const metrics = useMemo((): PnLMetrics => {
     // Calculate current total value

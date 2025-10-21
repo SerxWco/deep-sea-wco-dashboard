@@ -2333,8 +2333,8 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, conversationId, sessionId } = await req.json();
-    console.log('Received messages:', messages.length, 'conversationId:', conversationId, 'sessionId:', sessionId);
+    const { messages, conversationId, sessionId, userId } = await req.json();
+    console.log('Received messages:', messages.length, 'conversationId:', conversationId, 'sessionId:', sessionId, 'userId:', userId);
     
     // Handle conversation memory
     let finalConversationId = conversationId;
@@ -2355,11 +2355,11 @@ serve(async (req) => {
         if (existingConv) {
           finalConversationId = existingConv.id;
           console.log('📖 Found existing conversation:', finalConversationId);
-        } else {
-          // Create new conversation
+        } else if (userId) {
+          // Create new conversation with user_id
           const { data: newConv, error: convError } = await supabase
             .from('chat_conversations')
-            .insert({ session_id: sessionId })
+            .insert({ session_id: sessionId, user_id: userId })
             .select('id')
             .single();
           

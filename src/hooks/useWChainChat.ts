@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ChatMessage {
@@ -19,25 +19,28 @@ const getSessionId = () => {
   return sessionId;
 };
 
-export const useWChainChat = () => {
+interface UseWChainChatParams {
+  userId: string | null;
+}
+
+export const useWChainChat = ({ userId }: UseWChainChatParams) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const sessionId = getSessionId();
 
-  // Load conversation history on mount
-  useEffect(() => {
-    loadConversationHistory();
-  }, []);
-
-  const loadConversationHistory = async () => {
+  // Load conversation history when user is available
+  const loadConversationHistory = useCallback(async () => {
+    if (!userId) return;
+    
     try {
-      // Find existing conversation for this session
+      // Find existing conversation for this session and user
       const { data: convData } = await supabase
         .from('chat_conversations')
         .select('id')
         .eq('session_id', sessionId)
+        .eq('user_id', userId)
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -66,10 +69,17 @@ export const useWChainChat = () => {
     } catch (err) {
       console.error('Failed to load conversation history:', err);
     }
-  };
+  }, [userId, sessionId]);
+
+  // Load conversation history when user is available
+  useEffect(() => {
+    if (userId) {
+      loadConversationHistory();
+    }
+  }, [userId, loadConversationHistory]);
 
   const sendMessage = async (content: string) => {
-    if (!content.trim()) return;
+    if (!content.trim() || !userId) return;
 
     try {
       setError(null);
@@ -86,10 +96,10 @@ export const useWChainChat = () => {
       // Call edge function
       const { data, error: functionError } = await supabase.functions.invoke('chat-wchain', {
         body: {
-          // send only current turn; server now adds history context
           messages: [{ role: 'user', content }],
           conversationId,
-          sessionId
+          sessionId,
+          userId
         }
       });
 

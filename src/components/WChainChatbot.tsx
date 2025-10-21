@@ -4,13 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useWChainChat } from '@/hooks/useWChainChat';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { BubblesAvatar } from './BubblesAvatar';
 
 
 export const WChainChatbot = () => {
   const [input, setInput] = useState('');
-  const { messages, loading, error, sendMessage, setFeedback, clearMessages } = useWChainChat();
+  const { user } = useAuth();
+  const { messages, loading, error, sendMessage, setFeedback, clearMessages } = useWChainChat({ userId: user?.id || null });
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
