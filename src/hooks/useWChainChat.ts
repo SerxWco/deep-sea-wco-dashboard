@@ -93,13 +93,12 @@ export const useWChainChat = ({ userId }: UseWChainChatParams) => {
       };
       setMessages(prev => [...prev, userMessage]);
 
-      // Call edge function
+      // Call edge function (userId comes from JWT, not request body)
       const { data, error: functionError } = await supabase.functions.invoke('chat-wchain', {
         body: {
           messages: [{ role: 'user', content }],
           conversationId,
-          sessionId,
-          userId
+          sessionId
         }
       });
 

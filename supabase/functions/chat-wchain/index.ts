@@ -11,9 +11,7 @@ const corsHeaders = {
 const W_CHAIN_API = "https://scan.w-chain.com/api/v2";
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 
 // Simple cache
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -2328,16 +2326,38 @@ async function executeGetWSwapPools() {
   }
 }
 
-// Request validation schema
+// Request validation schema (userId comes from JWT, not request body)
 const requestSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant', 'system']),
     content: z.string().min(1).max(10000)
   })).min(1).max(50),
   conversationId: z.string().uuid().optional(),
-  sessionId: z.string().min(1).max(100),
-  userId: z.string().uuid().optional()
+  sessionId: z.string().min(1).max(100)
 });
+
+// Simple in-memory rate limiting (per user)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const RATE_LIMIT_MAX = 20; // 20 requests per minute per user
+
+function checkRateLimit(userId: string): { allowed: boolean; resetIn?: number } {
+  const now = Date.now();
+  const userLimit = rateLimitMap.get(userId);
+  
+  if (!userLimit || now > userLimit.resetAt) {
+    // Reset or create new limit
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return { allowed: true };
+  }
+  
+  if (userLimit.count >= RATE_LIMIT_MAX) {
+    return { allowed: false, resetIn: Math.ceil((userLimit.resetAt - now) / 1000) };
+  }
+  
+  userLimit.count++;
+  return { allowed: true };
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -2345,6 +2365,62 @@ serve(async (req) => {
   }
 
   try {
+    // Extract JWT token and create authenticated Supabase client
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('❌ Missing Authorization header');
+      return new Response(
+        JSON.stringify({ error: 'Authentication required' }), 
+        { 
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Create Supabase client with user's JWT
+    const supabase = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
+      global: {
+        headers: { Authorization: authHeader }
+      }
+    });
+
+    // Get authenticated user from JWT
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.error('❌ Authentication failed:', authError);
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication token' }), 
+        { 
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    const userId = user.id;
+    console.log('🔐 Authenticated user:', userId);
+
+    // Rate limiting check
+    const rateLimit = checkRateLimit(userId);
+    if (!rateLimit.allowed) {
+      console.warn(`⚠️ Rate limit exceeded for user ${userId}`);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Rate limit exceeded',
+          message: `Too many requests. Please try again in ${rateLimit.resetIn} seconds.`
+        }), 
+        { 
+          status: 429,
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'Retry-After': String(rateLimit.resetIn)
+          }
+        }
+      );
+    }
+
     // Parse and validate request body
     const rawBody = await req.json();
     const validationResult = requestSchema.safeParse(rawBody);
@@ -2363,8 +2439,8 @@ serve(async (req) => {
       );
     }
     
-    const { messages, conversationId, sessionId, userId } = validationResult.data;
-    console.log('✅ Validated request - messages:', messages.length, 'conversationId:', conversationId, 'sessionId:', sessionId, 'userId:', userId);
+    const { messages, conversationId, sessionId } = validationResult.data;
+    console.log('✅ Validated request - User:', userId, 'Messages:', messages.length, 'ConversationId:', conversationId, 'SessionId:', sessionId);
     
     // Handle conversation memory
     let finalConversationId = conversationId;
@@ -2373,11 +2449,12 @@ serve(async (req) => {
     if (sessionId) {
       // Try to load existing conversation for this session
       if (!conversationId) {
-        // Look for existing conversation
+        // Look for existing conversation for authenticated user
         const { data: existingConv } = await supabase
           .from('chat_conversations')
           .select('id')
           .eq('session_id', sessionId)
+          .eq('user_id', userId)
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -2385,8 +2462,8 @@ serve(async (req) => {
         if (existingConv) {
           finalConversationId = existingConv.id;
           console.log('📖 Found existing conversation:', finalConversationId);
-        } else if (userId) {
-          // Create new conversation with user_id
+        } else {
+          // Create new conversation with authenticated user_id
           const { data: newConv, error: convError } = await supabase
             .from('chat_conversations')
             .insert({ session_id: sessionId, user_id: userId })
