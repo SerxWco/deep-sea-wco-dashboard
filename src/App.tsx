@@ -46,18 +46,14 @@ const App = () => (
               </DashboardLayout>
             } />
             <Route path="/creatures" element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <OceanCreatures />
-                </DashboardLayout>
-              </ProtectedRoute>
+              <DashboardLayout>
+                <OceanCreatures />
+              </DashboardLayout>
             } />
             <Route path="/portfolio" element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Portfolio />
-                </DashboardLayout>
-              </ProtectedRoute>
+              <DashboardLayout>
+                <Portfolio />
+              </DashboardLayout>
             } />
             <Route path="/tokens" element={
               <DashboardLayout>
