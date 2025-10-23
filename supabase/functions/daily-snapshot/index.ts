@@ -19,34 +19,86 @@ interface MetricsData {
   networkActivityRate: number;
 }
 
-async function collectMetrics(): Promise<MetricsData> {
+async function collectMetrics(supabase: any): Promise<MetricsData> {
   console.log('Starting metrics collection...');
   
   const metrics: Partial<MetricsData> = {};
   
   try {
-    // Fetch W-Chain network stats
-    console.log('Fetching W-Chain network stats...');
-    const wchainResponse = await fetch('https://oracle-w-chain.com/api/wchain/network-stats');
-    if (wchainResponse.ok) {
-      const wchainData = await wchainResponse.json();
-      console.log('W-Chain data:', wchainData);
-      
-      metrics.totalHolders = wchainData.totalHolders || 0;
-      metrics.transactions24h = wchainData.transactions24h || 0;
-      metrics.wcoMoved24h = parseFloat(wchainData.wcoMoved24h) || 0;
-      metrics.activeWallets = wchainData.activeWallets || 0;
-      metrics.averageTransactionSize = parseFloat(wchainData.averageTransactionSize) || 0;
-      metrics.networkActivityRate = parseFloat(wchainData.networkActivityRate) || 0;
+    // Fetch holder count from our cache using direct query
+    console.log('Fetching holder count from cache...');
+    const { data: holders, error: holderError } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('address')
+      .limit(5000);
+    
+    if (!holderError && holders) {
+      metrics.totalHolders = holders.length;
+      console.log('Holder count from cache:', metrics.totalHolders);
     }
   } catch (error) {
-    console.error('Error fetching W-Chain stats:', error);
+    console.error('Error fetching holder count:', error);
+  }
+  
+  try {
+    // Fetch 24h network stats from W-Chain REST API
+    console.log('Fetching 24h network stats...');
+    const statsResponse = await fetch('https://scan.w-chain.com/api/v2/stats');
+    if (statsResponse.ok) {
+      const statsData = await statsResponse.json();
+      console.log('Network stats:', statsData);
+      
+      metrics.transactions24h = parseInt(statsData.transactions_today || '0') || 0;
+    }
+  } catch (error) {
+    console.error('Error fetching network stats:', error);
+  }
+  
+  try {
+    // Fetch recent transactions to calculate 24h volume and active wallets
+    console.log('Fetching recent transactions...');
+    const txResponse = await fetch('https://scan.w-chain.com/api/v2/transactions?limit=1000');
+    if (txResponse.ok) {
+      const txData = await txResponse.json();
+      const transactions = txData.items || [];
+      
+      const now = Date.now();
+      const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+      
+      let wcoMoved = 0;
+      let txCount = 0;
+      const activeWallets = new Set<string>();
+      
+      transactions.forEach((tx: any) => {
+        const txTime = new Date(tx.timestamp).getTime();
+        if (txTime >= twentyFourHoursAgo) {
+          const value = parseFloat(tx.value) / 1e18;
+          wcoMoved += value;
+          txCount++;
+          activeWallets.add(tx.from.hash.toLowerCase());
+          activeWallets.add(tx.to.hash.toLowerCase());
+        }
+      });
+      
+      metrics.wcoMoved24h = wcoMoved;
+      metrics.activeWallets = activeWallets.size;
+      metrics.averageTransactionSize = txCount > 0 ? wcoMoved / txCount : 0;
+      metrics.networkActivityRate = metrics.totalHolders ? (activeWallets.size / metrics.totalHolders) * 100 : 0;
+      
+      console.log('Transaction metrics:', {
+        wcoMoved24h: metrics.wcoMoved24h,
+        activeWallets: metrics.activeWallets,
+        avgTxSize: metrics.averageTransactionSize
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching transactions:', error);
   }
   
   try {
     // Fetch W-Chain price data
     console.log('Fetching W-Chain price data...');
-    const priceResponse = await fetch('https://oracle-w-chain.com/api/wco/price');
+    const priceResponse = await fetch('https://oracle.w-chain.com/api/price/wco');
     let wcoPrice = 0;
     if (priceResponse.ok) {
       const priceData = await priceResponse.json();
@@ -58,7 +110,7 @@ async function collectMetrics(): Promise<MetricsData> {
     
     // Fetch W-Chain supply data
     console.log('Fetching W-Chain supply data...');
-    const supplyResponse = await fetch('https://oracle-w-chain.com/api/wco/supply-info');
+    const supplyResponse = await fetch('https://oracle.w-chain.com/api/wco/supply-info');
     let circulatingSupply = 0;
     if (supplyResponse.ok) {
       const supplyData = await supplyResponse.json();
@@ -105,27 +157,32 @@ async function collectMetrics(): Promise<MetricsData> {
   try {
     // Fetch burn data
     console.log('Fetching burn data...');
-    const burnResponse = await fetch('https://wco-scan.com/api/address/0x000000000000000000000000000000000000dead/balance');
+    const BURN_ADDRESS = '0x0000000000000000000000000000000000000000';
+    const burnResponse = await fetch(`https://scan.w-chain.com/api/v2/addresses/${BURN_ADDRESS}`);
     if (burnResponse.ok) {
       const burnData = await burnResponse.json();
       console.log('Burn data:', burnData);
       
-      const totalBurnt = parseFloat(burnData.balance) / 1e18;
+      const totalBurnt = parseFloat(burnData.coin_balance || '0') / 1e18;
       metrics.wcoBurntTotal = totalBurnt;
       
       // Fetch recent transactions to calculate 24h burn
-      const txResponse = await fetch('https://wco-scan.com/api/address/0x000000000000000000000000000000000000dead/transactions?limit=100');
+      const txResponse = await fetch(`https://scan.w-chain.com/api/v2/addresses/${BURN_ADDRESS}/transactions?filter=to`);
       if (txResponse.ok) {
         const txData = await txResponse.json();
+        const transactions = txData.items || [];
         const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-        const recent24hTxs = txData.transactions?.filter((tx: any) => 
-          new Date(tx.timestamp).getTime() > oneDayAgo
-        ) || [];
         
-        const burnt24h = recent24hTxs.reduce((sum: number, tx: any) => 
-          sum + (parseFloat(tx.value) / 1e18), 0
-        );
+        let burnt24h = 0;
+        transactions.forEach((tx: any) => {
+          const txTime = new Date(tx.timestamp).getTime();
+          if (txTime >= oneDayAgo) {
+            burnt24h += parseFloat(tx.value) / 1e18;
+          }
+        });
+        
         metrics.wcoBurnt24h = burnt24h;
+        console.log('24h burn:', burnt24h);
       }
     }
   } catch (error) {
@@ -223,7 +280,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
     // Collect all metrics
-    const metrics = await collectMetrics();
+    const metrics = await collectMetrics(supabase);
     
     // Store snapshot in database
     const result = await storeSnapshot(supabase, metrics);

@@ -15,5 +15,8 @@ verify_jwt = false
 [functions.refresh-leaderboard-cache.schedule]
 cron = "0 */6 * * *"
 
+[functions.daily-snapshot.schedule]
+cron = "0 19 * * *"
+
 [functions.telegram-bot]
 verify_jwt = false
