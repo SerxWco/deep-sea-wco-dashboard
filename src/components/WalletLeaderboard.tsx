@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Loader2, ExternalLink } from 'lucide-react';
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Loader2, ExternalLink, RefreshCw } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,13 +12,13 @@ import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { WalletDetailsModal } from '@/components/WalletDetailsModal';
 
 export function WalletLeaderboard() {
-  const { wallets, loading, loadingMore, error, refetch, loadMore, hasMore, totalFetched, allCategories } = useWalletLeaderboard();
+  const { wallets, loading, error, refetch, totalFetched, allCategories, cacheAge, refreshCache, isRefreshing } = useWalletLeaderboard();
   const { data: marketData } = useWCOMarketData();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
   const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const wcoPrice = marketData?.current_price || 0;
 
@@ -87,23 +88,27 @@ export function WalletLeaderboard() {
     setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
   };
 
-  // Infinite scroll implementation
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
-          loadMore();
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
+  const handleManualRefresh = async () => {
+    try {
+      toast({
+        title: "Refreshing cache...",
+        description: "This may take 2-3 minutes. The page will update automatically.",
+      });
+      
+      await refreshCache();
+      
+      toast({
+        title: "Cache updated!",
+        description: `Loaded ${totalFetched.toLocaleString()} wallets.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Refresh failed",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
     }
-
-    return () => observer.disconnect();
-  }, [hasMore, loadingMore, loading, loadMore]);
+  };
 
   if (loading) {
     return (
@@ -136,14 +141,33 @@ export function WalletLeaderboard() {
     <>
       <Card className="w-full bg-gradient-to-br from-background/80 to-background/40 backdrop-blur-md border-border/20">
       <CardHeader>
-        <CardTitle className="text-2xl font-bold text-foreground flex items-center gap-2">
-          🌊 Ocean Leaderboard
-          <Badge variant="secondary" className="ml-2">
-            {totalFetched.toLocaleString()} wallets loaded
-          </Badge>
-        </CardTitle>
+        <div className="flex items-center justify-between mb-4">
+          <CardTitle className="text-2xl font-bold text-foreground flex items-center gap-2">
+            🌊 Ocean Leaderboard
+            <Badge variant="secondary" className="ml-2">
+              {totalFetched.toLocaleString()} wallets
+            </Badge>
+          </CardTitle>
+          
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        </div>
+
+        {cacheAge && (
+          <div className="text-sm text-muted-foreground mb-3">
+            Last updated: {cacheAge} • Auto-refreshes every 6 hours
+          </div>
+        )}
         
-        <div className="flex flex-col sm:flex-row gap-4 mt-4">
+        <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input
@@ -266,34 +290,21 @@ export function WalletLeaderboard() {
         </div>
 
         {wallets.length === 0 && !loading && (
-          <div className="text-center py-8 text-muted-foreground">
-            {searchTerm ? 'No wallets found matching your search.' : 'No wallet data available.'}
-          </div>
-        )}
-
-        {/* Load More Section */}
-        {hasMore && !loading && (
-          <div ref={loadMoreRef} className="mt-6 text-center">
-            {loadingMore ? (
-              <div className="flex items-center justify-center gap-2 py-4">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-muted-foreground">Loading more wallets...</span>
-              </div>
-            ) : (
-              <Button 
-                onClick={loadMore} 
-                variant="outline" 
-                className="bg-background/50 border-border/30"
-              >
-                Load More Wallets
+          <div className="text-center py-8">
+            <div className="text-muted-foreground mb-4">
+              {searchTerm ? 'No wallets found matching your search.' : 'Cache is empty. Click "Refresh" to load wallet data.'}
+            </div>
+            {!searchTerm && (
+              <Button onClick={handleManualRefresh} disabled={isRefreshing}>
+                {isRefreshing ? 'Loading...' : 'Load Wallet Data'}
               </Button>
             )}
           </div>
         )}
 
-        {!hasMore && wallets.length > 0 && (
+        {wallets.length > 0 && (
           <div className="text-center py-4 text-muted-foreground text-sm">
-            🎉 All available wallets loaded ({totalFetched.toLocaleString()} total)
+            Showing all {totalFetched.toLocaleString()} WCO holders
           </div>
         )}
       </CardContent>

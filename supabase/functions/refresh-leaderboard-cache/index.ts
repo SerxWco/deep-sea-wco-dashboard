@@ -5,20 +5,30 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const WCHAIN_API_BASE = 'https://wchain-explorer-production.up.railway.app/api/v2';
+const WCHAIN_API_BASE = 'https://scan.w-chain.com/api/v2';
 
 // Wallet categorization
 const FLAGSHIP_WALLETS: Record<string, string> = {
-  '0x6B7F0B0e3DD1E3c7f3d0e2B3b0B0B0B0B0B0B0B0': 'Team Wallet',
-  '0xF3b5b3b0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0': 'Development Fund',
-  '0xA3b5b3b0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0': 'Marketing Wallet',
-  '0x0000000000000000000000000000000000000000': 'Burn Address',
+  "0xfac510d5db8cadff323d4b979d898dc38f3fb6df": "Validation Nodes",
+  "0x511a6355407bb78f26172db35100a87b9be20fc3": "Liquidity Provision",
+  "0x2ca9472add8a02c74d50fc3ea444548502e35bdb": "Marketing & Community",
+  "0xa306799ee31c7f89d3ff82d3397972933d57d679": "Premium Account Features",
+  "0x94dbff05e1c129869772e1fb291901083cdadef1": "W Chain Ecosystem",
+  "0x58213dd561d12a0ea7b538b1b26de34dace1d0f0": "Developer Incentives",
+  "0x13768af351b4627dce8de6a67e59e4b27b4cbf5d": "Exchange Listings",
+  "0xa237feafa2bac4096867af6229a2370b7a661a5f": "Incentives",
+  "0xfc06231e2e448b778680202bea8427884c011341": "Institutional Sales",
+  "0x80eabd19b84b4f5f042103e957964297589c657d": "Enterprises & Partnerships",
+  "0x57ab15ca8bd528d509dbc81d11e9beca44f3445f": "Development Fund",
+  "0xba9be06936c806aefad981ae96fa4d599b78ad24": "WTK Conversion / Total Supply",
+  "0x67f2696c125d8d1307a5ae17348a440718229d03": "Treasury Wallet",
+  "0x81d29c0DcD64fAC05C4A394D455cbD79D210C200": "Buybacks",
 };
 
 const EXCHANGE_WALLETS: Record<string, string> = {
-  '0xE1b5b3b0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0': 'Bitmart',
-  '0xE2b5b3b0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0': 'MEXC',
-  '0xE3b5b3b0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0': 'Bitrue',
+  "0x6cc8dcbca746a6e4fdefb98e1d0df903b107fd21": "Bitrue Exchange",
+  "0x2802e182d5a15df915fd0363d8f1adfd2049f9ee": "MEXC Exchange", 
+  "0x430d2ada8140378989d20eae6d48ea05bbce2977": "Bitmart Exchange",
 };
 
 const ALL_CATEGORIES = [
@@ -60,39 +70,57 @@ function categorizeWallet(balance: number, address: string) {
 
 async function fetchAllWallets() {
   const allWallets: any[] = [];
-  let page = 1;
-  const pageSize = 50;
-  let hasMore = true;
+  const pageSize = 50; // API limit per page
+  let nextPageParams = null;
+  let pageCount = 0;
+  const maxPages = 100; // Safety limit (50 wallets × 100 pages = 5000 max)
+  const startTime = Date.now();
+  const maxDuration = 4.5 * 60 * 1000; // 4.5 minutes (safety margin before 5min timeout)
 
   console.log('Starting wallet fetch from W-Chain API...');
 
-  while (hasMore) {
+  let url = `${WCHAIN_API_BASE}/addresses?items_count=${pageSize}`;
+
+  while (pageCount < maxPages) {
+    // Check timeout
+    if (Date.now() - startTime > maxDuration) {
+      console.warn('Timeout approaching, stopping fetch');
+      break;
+    }
+
     try {
-      const url = `${WCHAIN_API_BASE}/addresses?page=${page}&items_count=${pageSize}`;
-      console.log(`Fetching page ${page}: ${url}`);
+      console.log(`Fetching page ${pageCount + 1}: ${url}`);
       
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: { 'Accept': 'application/json' }
+      });
+      
       if (!response.ok) {
-        console.error(`API error on page ${page}: ${response.status}`);
+        console.error(`API error on page ${pageCount + 1}: ${response.status}`);
+        if (response.status === 429) {
+          console.log('Rate limited, waiting 2 seconds...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
         break;
       }
 
       const data = await response.json();
       const items = data.items || [];
       
-      console.log(`Page ${page}: ${items.length} wallets fetched`);
+      console.log(`Page ${pageCount + 1}: ${items.length} wallets fetched`);
 
       if (items.length === 0) {
-        hasMore = false;
+        console.log('No more items, stopping');
         break;
       }
 
       for (const item of items) {
         const balance = parseFloat(item.coin_balance || '0') / 1e18;
-        const txCount = parseInt(item.tx_count || '0', 10);
+        const txCount = parseInt(item.tx_count || item.transaction_count || '0', 10);
         const address = item.hash;
 
-        if (balance > 0) {
+        if (balance > 0 && address) {
           const { category, emoji, label, isFlagship, isExchange, isWrapped } = categorizeWallet(balance, address);
           
           allWallets.push({
@@ -109,21 +137,31 @@ async function fetchAllWallets() {
         }
       }
 
-      if (items.length < pageSize) {
-        hasMore = false;
-      } else {
-        page++;
-      }
+      pageCount++;
 
-      // Rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Check for next page using next_page_params
+      if (data.next_page_params) {
+        const params = new URLSearchParams(data.next_page_params).toString();
+        url = `${WCHAIN_API_BASE}/addresses?items_count=${pageSize}&${params}`;
+        
+        // Rate limiting - 250ms delay between requests
+        await new Promise(resolve => setTimeout(resolve, 250));
+      } else {
+        console.log('No next_page_params, all pages fetched');
+        break;
+      }
     } catch (error) {
-      console.error(`Error fetching page ${page}:`, error);
-      hasMore = false;
+      console.error(`Error fetching page ${pageCount + 1}:`, error);
+      // Try one more time after error
+      if (pageCount > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      break;
     }
   }
 
-  console.log(`Total wallets fetched: ${allWallets.length}`);
+  console.log(`Total wallets fetched: ${allWallets.length} (${pageCount} pages)`);
   return allWallets;
 }
 
@@ -140,12 +178,13 @@ Deno.serve(async (req) => {
     console.log('Starting leaderboard cache refresh...');
 
     // Update metadata to indicate refresh in progress
+    const startTime = new Date().toISOString();
     const { error: metaError } = await supabase.from('wallet_cache_metadata')
       .upsert({
         id: '00000000-0000-0000-0000-000000000001',
         total_holders: 0,
         refresh_status: 'in_progress',
-        last_refresh: new Date().toISOString(),
+        last_refresh: startTime,
       }, { onConflict: 'id' });
     
     if (metaError) {
@@ -210,6 +249,20 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error refreshing cache:', error);
+    
+    // Update metadata to show error status
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    await supabase.from('wallet_cache_metadata')
+      .upsert({
+        id: '00000000-0000-0000-0000-000000000001',
+        total_holders: 0,
+        refresh_status: 'error',
+        last_refresh: new Date().toISOString(),
+      }, { onConflict: 'id' });
+    
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

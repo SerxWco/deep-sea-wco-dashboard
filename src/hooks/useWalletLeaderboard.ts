@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { wchainGraphQL } from '@/services/wchainGraphQL';
+import { useState, useEffect } from 'react';
 
 /**
  * Represents a wallet's data in the leaderboard
@@ -40,13 +41,13 @@ export const ALL_CATEGORIES: CategoryInfo[] = [
 interface UseWalletLeaderboardReturn {
   wallets: WalletData[];
   loading: boolean;
-  loadingMore: boolean;
   error: string | null;
   refetch: () => void;
-  loadMore: () => void;
-  hasMore: boolean;
   totalFetched: number;
   allCategories: CategoryInfo[];
+  cacheAge: string | null;
+  refreshCache: () => Promise<void>;
+  isRefreshing: boolean;
 }
 
 // Define special wallets
@@ -118,238 +119,155 @@ const categorizeWallet = (balance: number, address: string): { category: string;
 };
 
 /**
- * Fetches wallet leaderboard data using three-tier strategy:
- * 1. Supabase cache (fastest, 15-min TTL)
- * 2. GraphQL API (fast, bulk fetch 5000 wallets)
- * 3. REST API (fallback, paginated)
+ * Fetches wallet leaderboard data from Supabase cache only.
+ * Cache is refreshed automatically every 6 hours via cron job.
  */
 const fetchAllWallets = async (): Promise<WalletData[]> => {
-  // Function to fetch a specific wallet by address
-  const fetchSpecificWallet = async (address: string): Promise<WalletData | null> => {
-    try {
-      const response = await fetch(`https://scan.w-chain.com/api/v2/addresses/${address}`);
-      if (!response.ok) {
-        console.warn(`Failed to fetch wallet ${address}: ${response.status}`);
-        return null;
-      }
-
-      const account = await response.json();
-      if (!account?.hash || typeof account.hash !== 'string') return null;
-
-      const balanceWei = parseFloat(account.coin_balance) || 0;
-      const balance = balanceWei / 1e18;
-      const { category, emoji, label } = categorizeWallet(balance, account.hash);
-      
-      return {
-        address: account.hash,
-        balance,
-        category,
-        emoji,
-        txCount: parseInt(account.transaction_count || account.tx_count) || 0,
-        label,
-      };
-    } catch (error) {
-      console.warn(`Error fetching specific wallet ${address}:`, error);
-      return null;
-    }
-  };
-
-  // 1) Try Supabase cache first (fastest)
-  console.log('Attempting to fetch from Supabase cache...');
-  try {
-    const { data: cachedWallets, error: cacheError } = await supabase
-      .from('wallet_leaderboard_cache')
-      .select('*')
-      .order('balance', { ascending: false });
-
-    if (!cacheError && cachedWallets && cachedWallets.length > 0) {
-      console.log(`✅ Loaded ${cachedWallets.length} wallets from Supabase cache`);
-      
-      return cachedWallets.map(wallet => ({
-        address: wallet.address,
-        balance: Number(wallet.balance),
-        category: wallet.category,
-        emoji: wallet.emoji,
-        txCount: wallet.transaction_count,
-        label: wallet.label || undefined,
-      }));
-    }
-    
-    console.log('Cache empty or error, falling back to API...');
-  } catch (cacheErr) {
-    console.warn('Supabase cache fetch failed:', cacheErr);
-  }
-
-  // 2) Fast path: GraphQL (fetch top addresses in one request)
-  let allWallets: WalletData[] = [];
-  try {
-    const graphOK = await wchainGraphQL.testConnection();
-    if (graphOK) {
-      console.log('Using GraphQL fast-path for leaderboard');
-      const result = await wchainGraphQL.getNetworkStats(5000);
-      const processedWallets: WalletData[] = result.addresses.items
-        .filter((account: any) => account?.hash && typeof account.hash === 'string')
-        .map((account: any) => {
-          const balanceWei = parseFloat(account.coinBalance) || 0;
-          const balance = balanceWei / 1e18;
-          const { category, emoji, label } = categorizeWallet(balance, account.hash);
-          return {
-            address: account.hash,
-            balance,
-            category,
-            emoji,
-            txCount: parseInt(account.transactionsCount) || 0,
-            label,
-          };
-        });
-
-      allWallets = processedWallets;
-
-      // Verify flagship wallets
-      const flagshipAddresses = Object.keys(FLAGSHIP_WALLETS);
-      const foundFlagships = allWallets.filter(w => flagshipAddresses.includes(w.address.toLowerCase()));
-      const missingFlagships = flagshipAddresses.filter(addr => 
-        !foundFlagships.some(w => w.address.toLowerCase() === addr.toLowerCase())
-      );
-
-      if (missingFlagships.length > 0) {
-        console.log('Fetching missing flagship wallets:', missingFlagships);
-        for (const address of missingFlagships) {
-          const wallet = await fetchSpecificWallet(address);
-          if (wallet) {
-            allWallets.push(wallet);
-          }
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-      }
-
-      return allWallets;
-    }
-  } catch (e) {
-    console.warn('GraphQL fast-path failed, falling back to REST:', e);
-  }
-
-  // 3) Fallback: REST paginated crawl
-  const baseUrl = "https://scan.w-chain.com/api/v2/addresses";
-  let url = `${baseUrl}?items_count=100`;
-  let keepFetching = true;
-  let pageCount = 0;
-  const maxInitialPages = 15; // Fetch ~1500 wallets (15 pages × 100)
+  console.log('Fetching wallets from Supabase cache...');
   
-  while (keepFetching && pageCount < maxInitialPages) {
-    console.log(`Fetching page ${pageCount + 1}:`, url);
-    const response = await fetch(url);
+  const { data: cachedWallets, error: cacheError } = await supabase
+    .from('wallet_leaderboard_cache')
+    .select('*')
+    .order('balance', { ascending: false });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    
-    if (!result || !result.items || !Array.isArray(result.items)) {
-      console.warn('No more data from API, stopping fetch');
-      break;
-    }
-
-    if (result.items.length === 0) {
-      console.log('API returned empty results, stopping fetch');
-      break;
-    }
-
-    const processedWallets: WalletData[] = result.items
-      .filter((account: any) => account?.hash && typeof account.hash === 'string')
-      .map((account: any) => {
-        const balanceWei = parseFloat(account.coin_balance) || 0;
-        const balance = balanceWei / 1e18;
-        const { category, emoji, label } = categorizeWallet(balance, account.hash);
-        
-        return {
-          address: account.hash,
-          balance,
-          category,
-          emoji,
-          txCount: parseInt(account.transaction_count || account.tx_count) || 0,
-          label,
-        };
-      });
-
-    allWallets = [...allWallets, ...processedWallets];
-    pageCount++;
-    
-    if (result.next_page_params) {
-      const params = new URLSearchParams(result.next_page_params).toString();
-      url = `${baseUrl}?items_count=100&${params}`;
-    } else {
-      keepFetching = false;
-    }
-    
-    console.log(`Fetched page ${pageCount}, total wallets: ${allWallets.length}`);
-    
-    if (keepFetching && pageCount < maxInitialPages) {
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
+  if (cacheError) {
+    console.error('Error fetching from cache:', cacheError);
+    throw new Error(`Failed to load wallet data: ${cacheError.message}`);
   }
 
-  // Verify flagship wallets
-  console.log('Verifying flagship wallets...');
-  const flagshipAddresses = Object.keys(FLAGSHIP_WALLETS);
-  const foundFlagships = allWallets.filter(w => flagshipAddresses.includes(w.address.toLowerCase()));
-  const missingFlagships = flagshipAddresses.filter(addr => 
-    !foundFlagships.some(w => w.address.toLowerCase() === addr.toLowerCase())
-  );
+  if (!cachedWallets || cachedWallets.length === 0) {
+    console.warn('Cache is empty - may need initial refresh');
+    return [];
+  }
 
-  console.log(`Found ${foundFlagships.length}/${flagshipAddresses.length} flagship wallets`);
+  console.log(`✅ Loaded ${cachedWallets.length} wallets from cache`);
   
-  if (missingFlagships.length > 0) {
-    console.log('Fetching missing flagship wallets:', missingFlagships);
-    for (const address of missingFlagships) {
-      const wallet = await fetchSpecificWallet(address);
-      if (wallet) {
-        allWallets.push(wallet);
-        console.log(`✅ Added missing flagship wallet: ${wallet.label || address}`);
-      }
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-  }
-
-  return allWallets;
+  return cachedWallets.map(wallet => ({
+    address: wallet.address,
+    balance: Number(wallet.balance),
+    category: wallet.category,
+    emoji: wallet.emoji,
+    txCount: wallet.transaction_count,
+    label: wallet.label || undefined,
+  }));
 };
 
 /**
  * Custom hook for fetching and managing wallet leaderboard data.
  * 
- * Implements three-tier caching:
- * - Supabase cache (fastest, refreshed every 15 min)
- * - GraphQL API (fast bulk fetch)
- * - REST API fallback (paginated)
+ * Loads from Supabase cache which is automatically refreshed every 6 hours.
+ * Provides manual refresh capability via refreshCache().
  * 
- * Categorizes wallets into ocean creature tiers (Kraken, Whale, Shark, etc.)
- * and applies special labels for team wallets, exchanges, and wrapped tokens.
- * 
- * @returns Wallet data, loading states, and refetch function
+ * @returns Wallet data, loading states, cache age, and refresh function
  * 
  * @example
- * const { wallets, loading, refetch } = useWalletLeaderboard();
+ * const { wallets, loading, cacheAge, refreshCache, isRefreshing } = useWalletLeaderboard();
  */
 export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
-  // Use React Query for data fetching with 15-minute cache
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [cacheAge, setCacheAge] = useState<string | null>(null);
+
+  // Fetch wallet data from cache
   const { data: wallets = [], isLoading, error: queryError, refetch } = useQuery({
     queryKey: ['walletLeaderboard'],
     queryFn: fetchAllWallets,
-    staleTime: 15 * 60 * 1000, // 15 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes - check cache freshness frequently
     gcTime: 30 * 60 * 1000, // 30 minutes
     retry: 2,
   });
 
+  // Fetch cache metadata to show age
+  const { data: metadata } = useQuery({
+    queryKey: ['cacheMetadata'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('wallet_cache_metadata')
+        .select('*')
+        .eq('id', '00000000-0000-0000-0000-000000000001')
+        .single();
+      
+      if (error) {
+        console.error('Error fetching metadata:', error);
+        return null;
+      }
+      
+      return data;
+    },
+    refetchInterval: 30000, // Check every 30 seconds
+  });
+
+  // Calculate cache age
+  useEffect(() => {
+    if (metadata?.last_refresh) {
+      const lastRefresh = new Date(metadata.last_refresh);
+      const now = new Date();
+      const diffMs = now.getTime() - lastRefresh.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMins / 60);
+      
+      if (diffHours > 0) {
+        setCacheAge(`${diffHours}h ago`);
+      } else if (diffMins > 0) {
+        setCacheAge(`${diffMins}m ago`);
+      } else {
+        setCacheAge('just now');
+      }
+    }
+  }, [metadata]);
+
+  // Manual cache refresh function
+  const refreshCache = async () => {
+    setIsRefreshing(true);
+    try {
+      console.log('Triggering cache refresh...');
+      const { error } = await supabase.functions.invoke('refresh-leaderboard-cache');
+      
+      if (error) {
+        console.error('Error refreshing cache:', error);
+        throw error;
+      }
+      
+      // Wait a bit for the refresh to start
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Poll for completion (max 5 minutes)
+      const startTime = Date.now();
+      const maxWait = 5 * 60 * 1000;
+      
+      while (Date.now() - startTime < maxWait) {
+        const { data: meta } = await supabase
+          .from('wallet_cache_metadata')
+          .select('refresh_status')
+          .eq('id', '00000000-0000-0000-0000-000000000001')
+          .single();
+        
+        if (meta?.refresh_status === 'completed') {
+          console.log('Cache refresh completed!');
+          await refetch(); // Reload wallet data
+          break;
+        }
+        
+        if (meta?.refresh_status === 'error') {
+          throw new Error('Cache refresh failed');
+        }
+        
+        // Wait 3 seconds before checking again
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return { 
     wallets, 
     loading: isLoading, 
-    loadingMore: false, // No pagination with this approach
     error: queryError ? (queryError as Error).message : null, 
     refetch: () => { refetch(); },
-    loadMore: () => {}, // No-op since we fetch all data at once
-    hasMore: false, // All data loaded at once
     totalFetched: wallets.length,
     allCategories: ALL_CATEGORIES,
+    cacheAge,
+    refreshCache,
+    isRefreshing,
   };
 };
