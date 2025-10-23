@@ -2,13 +2,16 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { wchainGraphQL } from '@/services/wchainGraphQL';
 
+/**
+ * Represents a wallet's data in the leaderboard
+ */
 export interface WalletData {
-  address: string;
-  balance: number;
-  category: string;
-  emoji: string;
-  txCount: number;
-  label?: string;
+  address: string;   // Wallet address (0x...)
+  balance: number;   // WCO balance
+  category: string;  // Ocean creature category
+  emoji: string;     // Category emoji
+  txCount: number;   // Transaction count
+  label?: string;    // Special label (e.g., "Treasury Wallet")
 }
 
 export interface CategoryInfo {
@@ -114,7 +117,12 @@ const categorizeWallet = (balance: number, address: string): { category: string;
   return { category: 'Plankton', emoji: '🦠' };
 };
 
-// Fetch function for React Query
+/**
+ * Fetches wallet leaderboard data using three-tier strategy:
+ * 1. Supabase cache (fastest, 15-min TTL)
+ * 2. GraphQL API (fast, bulk fetch 5000 wallets)
+ * 3. REST API (fallback, paginated)
+ */
 const fetchAllWallets = async (): Promise<WalletData[]> => {
   // Function to fetch a specific wallet by address
   const fetchSpecificWallet = async (address: string): Promise<WalletData | null> => {
@@ -307,6 +315,22 @@ const fetchAllWallets = async (): Promise<WalletData[]> => {
   return allWallets;
 };
 
+/**
+ * Custom hook for fetching and managing wallet leaderboard data.
+ * 
+ * Implements three-tier caching:
+ * - Supabase cache (fastest, refreshed every 15 min)
+ * - GraphQL API (fast bulk fetch)
+ * - REST API fallback (paginated)
+ * 
+ * Categorizes wallets into ocean creature tiers (Kraken, Whale, Shark, etc.)
+ * and applies special labels for team wallets, exchanges, and wrapped tokens.
+ * 
+ * @returns Wallet data, loading states, and refetch function
+ * 
+ * @example
+ * const { wallets, loading, refetch } = useWalletLeaderboard();
+ */
 export const useWalletLeaderboard = (): UseWalletLeaderboardReturn => {
   // Use React Query for data fetching with 15-minute cache
   const { data: wallets = [], isLoading, error: queryError, refetch } = useQuery({
