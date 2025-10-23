@@ -234,7 +234,7 @@ const fetchAllWallets = async (): Promise<WalletData[]> => {
   let url = `${baseUrl}?items_count=100`;
   let keepFetching = true;
   let pageCount = 0;
-  const maxInitialPages = 50;
+  const maxInitialPages = 15; // Fetch ~1500 wallets (15 pages × 100)
   
   while (keepFetching && pageCount < maxInitialPages) {
     console.log(`Fetching page ${pageCount + 1}:`, url);
