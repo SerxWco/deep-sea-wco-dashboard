@@ -9,6 +9,23 @@ import { toast } from 'sonner';
 import { BubblesAvatar } from './BubblesAvatar';
 
 
+/**
+ * Bubbles AI Chatbot Component
+ * 
+ * An AI-powered blockchain assistant with access to 25+ W-Chain data tools.
+ * Features:
+ * - Natural language queries about wallets, tokens, transactions, and network stats
+ * - Persistent conversation history with session management
+ * - User feedback system (thumbs up/down)
+ * - Animated avatar that responds to chat state (idle/thinking)
+ * - Auto-scroll to latest message
+ * 
+ * Uses the useWChainChat hook which communicates with the chat-wchain edge function.
+ * The edge function uses Google Gemini models with tool-calling capabilities.
+ * 
+ * @example
+ * <WChainChatbot />
+ */
 export const WChainChatbot = () => {
   const [input, setInput] = useState('');
   const { user } = useAuth();

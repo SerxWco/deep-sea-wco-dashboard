@@ -12,7 +12,19 @@ export interface AggregatedTrade {
   avgPrice: number;
 }
 
-// Get interval in milliseconds based on time range
+/**
+ * Calculates the time interval for aggregation buckets.
+ * 
+ * Bucket sizes:
+ * - 1h: 5-minute buckets (12 buckets)
+ * - 6h: 15-minute buckets (24 buckets)
+ * - 24h: 1-hour buckets (24 buckets)
+ * - 7d: 6-hour buckets (28 buckets)
+ * - all: 1-day buckets
+ * 
+ * @param range - Time range for aggregation
+ * @returns Interval in milliseconds
+ */
 const getIntervalMs = (range: TimeRange): number => {
   switch (range) {
     case '1h':
@@ -68,6 +80,27 @@ const formatTimeLabel = (timestamp: number, range: TimeRange): string => {
   }
 };
 
+/**
+ * Aggregates WSwap trades into time buckets for chart visualization.
+ * 
+ * Process:
+ * 1. Filter trades by time range cutoff
+ * 2. Group trades into time buckets (e.g., 5-min intervals for 1h view)
+ * 3. Calculate metrics for each bucket:
+ *    - Total volume (buy + sell)
+ *    - Buy vs sell volume
+ *    - Trade count
+ *    - Average price (only from trades with valid price data)
+ * 4. Sort by timestamp ascending
+ * 
+ * @param trades - Array of WSwap trades
+ * @param timeRange - Time range for aggregation
+ * @returns Array of aggregated trade data for charting
+ * 
+ * @example
+ * const aggregated = aggregateTrades(trades, '24h');
+ * // Returns hourly buckets for the last 24 hours
+ */
 export const aggregateTrades = (trades: WSwapTrade[], timeRange: TimeRange): AggregatedTrade[] => {
   if (trades.length === 0) return [];
 
@@ -81,9 +114,11 @@ export const aggregateTrades = (trades: WSwapTrade[], timeRange: TimeRange): Agg
 
   // Group trades into time buckets
   const buckets = new Map<number, WSwapTrade[]>();
-
+  
+  // Each bucket represents one interval (e.g., 5 minutes, 1 hour)
   filteredTrades.forEach(trade => {
     const tradeTime = trade.timestamp * 1000;
+    // Calculate bucket start time (floor to nearest interval)
     const bucketTime = Math.floor(tradeTime / intervalMs) * intervalMs;
     
     if (!buckets.has(bucketTime)) {

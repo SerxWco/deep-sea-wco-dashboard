@@ -107,6 +107,33 @@ export const getPreviousSnapshot = async (): Promise<DailyMetric | null> => {
   }
 };
 
+/**
+ * Compares current metrics with the previous day's snapshot.
+ * 
+ * Data sources (in priority order):
+ * 1. Supabase daily_metrics table (primary)
+ * 2. localStorage (fallback for backward compatibility)
+ * 
+ * Calculates both absolute and percentage changes for:
+ * - Total holders
+ * - Market cap
+ * - Transaction count
+ * - Supply metrics
+ * - Network activity
+ * 
+ * @param currentMetrics - Today's metrics (without date field)
+ * @returns Object with change values and percentages for all metrics
+ * 
+ * @example
+ * const comparison = await getDailyComparison({
+ *   totalHolders: 15000,
+ *   marketCap: 1234567,
+ *   // ...
+ * });
+ * if (comparison) {
+ *   console.log(`Holders change: ${comparison.totalHolders.change}`);
+ * }
+ */
 export const getDailyComparison = async (currentMetrics: Omit<DailyMetric, 'date'>) => {
   try {
     // Try to get comparison from Supabase first
@@ -135,6 +162,19 @@ export const getDailyComparison = async (currentMetrics: Omit<DailyMetric, 'date
   }
 };
 
+/**
+ * Calculates the difference between current and previous metrics.
+ * 
+ * For each metric, returns:
+ * - change: Absolute difference (current - previous)
+ * - percentage: Percentage change ((current - previous) / previous * 100)
+ * 
+ * Zero division is handled by returning 0% for metrics with no previous value.
+ * 
+ * @param current - Current metrics
+ * @param previous - Previous day's metrics
+ * @returns Object with change and percentage for each metric
+ */
 const calculateChanges = (current: Omit<DailyMetric, 'date'>, previous: DailyMetric) => {
   return {
     totalHolders: {

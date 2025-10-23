@@ -2,14 +2,17 @@ import { useState, useEffect } from 'react';
 import { useWChainPriceAPI } from './useWChainPriceAPI';
 import { useWCOSupplyInfo } from './useWCOSupplyInfo';
 
+/**
+ * Complete market data for WCO token
+ */
 interface WCOMarketData {
-  current_price: number;
-  market_cap: number;
-  total_volume: number;
-  circulating_supply: number;
-  price_change_24h: number;
-  price_change_percentage_24h: number;
-  ath: number;
+  current_price: number;            // Current WCO price in USD
+  market_cap: number;               // Market capitalization (price × circulating supply)
+  total_volume: number;             // 24h trading volume (from CoinGecko)
+  circulating_supply: number;       // Circulating supply in WCO
+  price_change_24h: number;         // Absolute price change in 24h
+  price_change_percentage_24h: number; // Percentage price change in 24h
+  ath: number;                      // All-time high price
 }
 
 interface UseWCOMarketDataReturn {
@@ -18,6 +21,23 @@ interface UseWCOMarketDataReturn {
   error: string | null;
 }
 
+/**
+ * Custom hook for fetching WCO market data from multiple sources.
+ * 
+ * Data sources:
+ * - W-Chain Price API: Real-time WCO price (primary source)
+ * - Supply calculation: From useWCOSupplyInfo hook
+ * - CoinGecko API: Volume, ATH, price changes (refreshed every 5 min)
+ * 
+ * Market cap is calculated locally: price × circulating_supply
+ * This ensures accuracy when exchange prices lag.
+ * 
+ * @returns Market data, loading state, and error message
+ * 
+ * @example
+ * const { data, loading, error } = useWCOMarketData();
+ * console.log(`Market Cap: $${data?.market_cap}`);
+ */
 export const useWCOMarketData = (): UseWCOMarketDataReturn => {
   const [data, setData] = useState<WCOMarketData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,11 +45,16 @@ export const useWCOMarketData = (): UseWCOMarketDataReturn => {
   const { wcoPrice, loading: wchainLoading } = useWChainPriceAPI();
   const { data: supplyData, loading: supplyLoading } = useWCOSupplyInfo();
 
+  /**
+   * Fetches supplementary data from CoinGecko (volume, ATH, price changes).
+   * We only use CoinGecko for these metrics, not for price or market cap,
+   * because our W-Chain data is more accurate and real-time.
+   */
   const fetchCoinGeckoData = async () => {
     try {
       setError(null);
       
-      // Only fetch volume data from CoinGecko
+      // Fetch volume and historical data from CoinGecko
       const response = await fetch(
         'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=wadzcoin&order=market_cap_desc&per_page=1&page=1&sparkline=false'
       );
@@ -80,7 +105,12 @@ export const useWCOMarketData = (): UseWCOMarketDataReturn => {
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate market cap whenever W-Chain data changes
+  /**
+   * Calculate market cap locally using W-Chain price and supply data.
+   * This is more accurate than relying on exchange data which may lag.
+   * 
+   * Formula: Market Cap = Current Price × Circulating Supply
+   */
   useEffect(() => {
     if (wchainLoading || supplyLoading) {
       setLoading(true);

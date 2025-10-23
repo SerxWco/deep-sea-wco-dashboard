@@ -33,9 +33,22 @@ const BACKUP_RPCS = [
 let cachedRPC: { url: string; timestamp: number } | null = null;
 const RPC_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-// Function to find working RPC with timeout and caching
+/**
+ * Finds a working W-Chain RPC endpoint with caching.
+ * 
+ * Strategy:
+ * 1. Check cache first (5 min TTL) to avoid repeated connection tests
+ * 2. Try primary RPC endpoint with 5s timeout
+ * 3. Fallback to backup endpoints if primary fails
+ * 4. Cache the working endpoint for 5 minutes
+ * 
+ * Uses getNetwork() instead of getBlockNumber() because it's faster
+ * and sufficient to verify the RPC is responsive.
+ * 
+ * @returns Working RPC URL or null if all endpoints fail
+ */
 const findWorkingRPC = async (): Promise<string | null> => {
-  // Check cache first
+  // Check cache first to avoid unnecessary connection attempts
   if (cachedRPC && Date.now() - cachedRPC.timestamp < RPC_CACHE_DURATION) {
     console.log(`Using cached RPC: ${cachedRPC.url}`);
     return cachedRPC.url;
@@ -43,17 +56,18 @@ const findWorkingRPC = async (): Promise<string | null> => {
 
   const allEndpoints = [W_CHAIN_RPC, ...BACKUP_RPCS];
   
+  // Try each endpoint sequentially until one works
   for (const rpcUrl of allEndpoints) {
     try {
       console.log(`Testing RPC endpoint: ${rpcUrl}`);
       const provider = new ethers.JsonRpcProvider(rpcUrl);
       
-      // Add 5 second timeout
+      // Add 5 second timeout to prevent hanging on dead endpoints
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Timeout')), 5000)
       );
       
-      // Use lighter call (getNetwork is faster than getBlockNumber)
+      // Use getNetwork() - it's faster than getBlockNumber()
       await Promise.race([
         provider.getNetwork(),
         timeoutPromise
@@ -61,13 +75,13 @@ const findWorkingRPC = async (): Promise<string | null> => {
       
       console.log(`✅ Working RPC found: ${rpcUrl}`);
       
-      // Cache the working RPC
+      // Cache the working RPC to avoid retesting for 5 minutes
       cachedRPC = { url: rpcUrl, timestamp: Date.now() };
       
       return rpcUrl;
     } catch (error) {
       console.log(`❌ RPC failed: ${rpcUrl}`, error);
-      continue;
+      continue; // Try next endpoint
     }
   }
   
@@ -78,7 +92,21 @@ const findWorkingRPC = async (): Promise<string | null> => {
 // Add delay function to avoid overwhelming RPC
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Retry function with exponential backoff
+/**
+ * Retry function with exponential backoff strategy.
+ * 
+ * Retry delays:
+ * - 1st retry: 1s delay
+ * - 2nd retry: 2s delay (1000 * 2^1)
+ * - 3rd retry: 4s delay (1000 * 2^2)
+ * 
+ * This prevents overwhelming the RPC with rapid retries when it's under load.
+ * 
+ * @param fn - Function to retry
+ * @param maxRetries - Maximum retry attempts (default: 3)
+ * @param baseDelay - Base delay in milliseconds (default: 1000)
+ * @returns Function result or null if all retries fail
+ */
 const retryWithBackoff = async <T>(
   fn: () => Promise<T>,
   maxRetries: number = 3,
@@ -92,12 +120,36 @@ const retryWithBackoff = async <T>(
         console.warn('Max retries reached:', error);
         return null;
       }
+      // Exponential backoff: 1s, 2s, 4s
       await delay(baseDelay * Math.pow(2, i));
     }
   }
   return null;
 };
 
+/**
+ * Custom hook for fetching ERC-20 token balances from W-Chain RPC.
+ * 
+ * Features:
+ * - Automatic RPC endpoint discovery with fallback URLs
+ * - RPC endpoint caching (5 min) to avoid connection overhead
+ * - Sequential processing with delays to prevent RPC overload
+ * - Exponential backoff retry strategy
+ * - USD valuation using multiple price feeds (WCO, WAVE, OG88)
+ * 
+ * Performance optimizations:
+ * - Only checks top 20 tokens by holder count
+ * - Skips tokens with zero balance
+ * - 200ms delay between requests
+ * - 2s delay every 5 requests
+ * 
+ * @param tokens - Array of ERC-20 tokens to check
+ * @param walletAddress - Wallet address to query balances for
+ * @returns Token balances with USD values, loading state, and refetch function
+ * 
+ * @example
+ * const { balances, loading, refetchBalances } = useTokenBalances(tokens, address);
+ */
 export const useTokenBalances = (
   tokens: WChainToken[],
   walletAddress: string | null
