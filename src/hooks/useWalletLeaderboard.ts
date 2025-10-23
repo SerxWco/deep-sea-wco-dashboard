@@ -128,7 +128,8 @@ const fetchAllWallets = async (): Promise<WalletData[]> => {
   const { data: cachedWallets, error: cacheError } = await supabase
     .from('wallet_leaderboard_cache')
     .select('*')
-    .order('balance', { ascending: false });
+    .order('balance', { ascending: false })
+    .limit(5000); // Fetch all wallets (default limit is 1000)
 
   if (cacheError) {
     console.error('Error fetching from cache:', cacheError);
