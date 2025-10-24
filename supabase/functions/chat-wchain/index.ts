@@ -2332,7 +2332,7 @@ const requestSchema = z.object({
     role: z.enum(['user', 'assistant', 'system']),
     content: z.string().min(1).max(10000)
   })).min(1).max(50),
-  conversationId: z.string().uuid().optional(),
+  conversationId: z.string().uuid().nullable().optional(),
   sessionId: z.string().min(1).max(100)
 });
 
