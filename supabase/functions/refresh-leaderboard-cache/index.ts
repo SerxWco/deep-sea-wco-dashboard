@@ -31,7 +31,14 @@ const EXCHANGE_WALLETS: Record<string, string> = {
   "0x430d2ada8140378989d20eae6d48ea05bbce2977": "Bitmart Exchange",
 };
 
+const WRAPPED_WCO: string[] = [
+  "0xedb8008031141024d50ca2839a607b2f82c1c045", // Wrapped WCO contract
+];
+
 const ALL_CATEGORIES = [
+  { name: 'Flagship', emoji: '🚩', minBalance: Infinity },
+  { name: 'Harbor', emoji: '⚓', minBalance: Infinity },
+  { name: 'Bridge/Wrapped', emoji: '🌉', minBalance: Infinity },
   { name: 'Kraken', emoji: '🦑', minBalance: 5000000 },
   { name: 'Whale', emoji: '🐋', minBalance: 1000001 },
   { name: 'Shark', emoji: '🦈', minBalance: 500001 },
@@ -44,23 +51,22 @@ const ALL_CATEGORIES = [
 ];
 
 function categorizeWallet(balance: number, address: string) {
-  const isWrapped = address.toLowerCase().includes('wrapped') || 
-                   address.toLowerCase().includes('0x0000000000000000000000000000000000000001');
+  const isWrapped = WRAPPED_WCO.includes(address.toLowerCase());
   const isFlagship = FLAGSHIP_WALLETS[address];
   const isExchange = EXCHANGE_WALLETS[address];
 
   if (isWrapped) {
-    return { category: 'Wrapped', emoji: '📦', label: 'Wrapped Token', isFlagship: false, isExchange: false, isWrapped: true };
+    return { category: 'Bridge/Wrapped', emoji: '🌉', label: 'Wrapped WCO', isFlagship: false, isExchange: false, isWrapped: true };
   }
   if (isFlagship) {
-    return { category: 'Flagship', emoji: '⭐', label: isFlagship, isFlagship: true, isExchange: false, isWrapped: false };
+    return { category: 'Flagship', emoji: '🚩', label: isFlagship, isFlagship: true, isExchange: false, isWrapped: false };
   }
   if (isExchange) {
-    return { category: 'Exchange', emoji: '🏦', label: isExchange, isFlagship: false, isExchange: true, isWrapped: false };
+    return { category: 'Harbor', emoji: '⚓', label: isExchange, isFlagship: false, isExchange: true, isWrapped: false };
   }
 
   for (const cat of ALL_CATEGORIES) {
-    if (balance >= cat.minBalance) {
+    if (balance >= cat.minBalance && cat.minBalance !== Infinity) {
       return { category: cat.name, emoji: cat.emoji, label: null, isFlagship: false, isExchange: false, isWrapped: false };
     }
   }
