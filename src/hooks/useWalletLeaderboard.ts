@@ -119,38 +119,54 @@ const categorizeWallet = (balance: number, address: string): { category: string;
 };
 
 /**
- * Fetches wallet leaderboard data from Supabase cache only.
+ * Fetches wallet leaderboard data from Supabase cache using pagination.
  * Cache is refreshed automatically every 6 hours via cron job.
  */
 const fetchAllWallets = async (): Promise<WalletData[]> => {
   console.log('Fetching wallets from Supabase cache...');
   
-  const { data: cachedWallets, error: cacheError } = await supabase
-    .from('wallet_leaderboard_cache')
-    .select('*')
-    .order('balance', { ascending: false })
-    .limit(5000); // Fetch all wallets (default limit is 1000)
+  const pageSize = 1000;
+  let allWallets: WalletData[] = [];
+  let page = 0;
+  let hasMore = true;
 
-  if (cacheError) {
-    console.error('Error fetching from cache:', cacheError);
-    throw new Error(`Failed to load wallet data: ${cacheError.message}`);
+  while (hasMore) {
+    const start = page * pageSize;
+    const end = start + pageSize - 1;
+
+    const { data: cachedWallets, error: cacheError } = await supabase
+      .from('wallet_leaderboard_cache')
+      .select('*')
+      .order('balance', { ascending: false })
+      .range(start, end);
+
+    if (cacheError) {
+      console.error('Error fetching from cache:', cacheError);
+      throw new Error(`Failed to load wallet data: ${cacheError.message}`);
+    }
+
+    if (!cachedWallets || cachedWallets.length === 0) {
+      hasMore = false;
+    } else {
+      allWallets.push(...cachedWallets.map(wallet => ({
+        address: wallet.address,
+        balance: Number(wallet.balance),
+        category: wallet.category,
+        emoji: wallet.emoji,
+        txCount: wallet.transaction_count,
+        label: wallet.label || undefined,
+      })));
+
+      // If we got less than pageSize, we've reached the end
+      if (cachedWallets.length < pageSize) {
+        hasMore = false;
+      }
+      page++;
+    }
   }
 
-  if (!cachedWallets || cachedWallets.length === 0) {
-    console.warn('Cache is empty - may need initial refresh');
-    return [];
-  }
-
-  console.log(`✅ Loaded ${cachedWallets.length} wallets from cache`);
-  
-  return cachedWallets.map(wallet => ({
-    address: wallet.address,
-    balance: Number(wallet.balance),
-    category: wallet.category,
-    emoji: wallet.emoji,
-    txCount: wallet.transaction_count,
-    label: wallet.label || undefined,
-  }));
+  console.log(`✅ Loaded ${allWallets.length} wallets from cache`);
+  return allWallets;
 };
 
 /**
