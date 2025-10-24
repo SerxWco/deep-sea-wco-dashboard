@@ -7,7 +7,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.chat-wchain]
-verify_jwt = true
+verify_jwt = false
 
 [functions.refresh-leaderboard-cache]
 verify_jwt = false

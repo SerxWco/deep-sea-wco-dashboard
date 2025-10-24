@@ -2365,60 +2365,48 @@ serve(async (req) => {
   }
 
   try {
-    // Extract JWT token and create authenticated Supabase client
+    // Extract JWT token (optional for public access)
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      console.error('❌ Missing Authorization header');
-      return new Response(
-        JSON.stringify({ error: 'Authentication required' }), 
-        { 
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Create Supabase client with user's JWT
+    
+    // Create Supabase client (with or without auth header)
     const supabase = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
       global: {
-        headers: { Authorization: authHeader }
+        headers: authHeader ? { Authorization: authHeader } : {}
       }
     });
 
-    // Get authenticated user from JWT
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      console.error('❌ Authentication failed:', authError);
-      return new Response(
-        JSON.stringify({ error: 'Invalid authentication token' }), 
-        { 
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    // Try to get authenticated user (optional)
+    let userId: string | null = null;
+    if (authHeader) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (!authError && user) {
+        userId = user.id;
+        console.log('🔐 Authenticated user:', userId);
+        
+        // Rate limiting check for authenticated users
+        const rateLimit = checkRateLimit(userId);
+        if (!rateLimit.allowed) {
+          console.warn(`⚠️ Rate limit exceeded for user ${userId}`);
+          return new Response(
+            JSON.stringify({ 
+              error: 'Rate limit exceeded',
+              message: `Too many requests. Please try again in ${rateLimit.resetIn} seconds.`
+            }), 
+            { 
+              status: 429,
+              headers: { 
+                ...corsHeaders, 
+                'Content-Type': 'application/json',
+                'Retry-After': String(rateLimit.resetIn)
+              }
+            }
+          );
         }
-      );
-    }
-
-    const userId = user.id;
-    console.log('🔐 Authenticated user:', userId);
-
-    // Rate limiting check
-    const rateLimit = checkRateLimit(userId);
-    if (!rateLimit.allowed) {
-      console.warn(`⚠️ Rate limit exceeded for user ${userId}`);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Rate limit exceeded',
-          message: `Too many requests. Please try again in ${rateLimit.resetIn} seconds.`
-        }), 
-        { 
-          status: 429,
-          headers: { 
-            ...corsHeaders, 
-            'Content-Type': 'application/json',
-            'Retry-After': String(rateLimit.resetIn)
-          }
-        }
-      );
+      } else {
+        console.log('🔓 Anonymous user (invalid token)');
+      }
+    } else {
+      console.log('🔓 Anonymous user (no auth header)');
     }
 
     // Parse and validate request body
@@ -2446,8 +2434,8 @@ serve(async (req) => {
     let finalConversationId = conversationId;
     let conversationHistory: any[] = [];
     
-    if (sessionId) {
-      // Try to load existing conversation for this session
+    if (sessionId && userId) {
+      // Try to load existing conversation for this session (only for authenticated users)
       if (!conversationId) {
         // Look for existing conversation for authenticated user
         const { data: existingConv } = await supabase
@@ -2801,8 +2789,8 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
     const msgLower = (latestUserMessage || '').toLowerCase();
 
     async function respondAndStore(messageText: string) {
-      // Store messages in database if we have a conversation ID
-      if (finalConversationId) {
+      // Store messages in database if we have a conversation ID (only for authenticated users)
+      if (finalConversationId && userId) {
         const userMessage = messages[messages.length - 1];
         await supabase.from('chat_messages').insert({
           conversation_id: finalConversationId,
@@ -2980,8 +2968,8 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
     // Decide message to return
     const directMessage = finalAssistantMessage || 'Sorry, I could not generate a response.';
     
-    // Store messages in database if we have a conversation ID
-    if (finalConversationId) {
+    // Store messages in database if we have a conversation ID (only for authenticated users)
+    if (finalConversationId && userId) {
       const userMessage = messages[messages.length - 1];
       
       // Store user message

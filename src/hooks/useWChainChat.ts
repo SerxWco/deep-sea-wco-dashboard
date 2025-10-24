@@ -79,7 +79,7 @@ export const useWChainChat = ({ userId }: UseWChainChatParams) => {
   }, [userId, loadConversationHistory]);
 
   const sendMessage = async (content: string) => {
-    if (!content.trim() || !userId) return;
+    if (!content.trim()) return;
 
     try {
       setError(null);
