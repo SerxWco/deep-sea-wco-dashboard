@@ -654,6 +654,51 @@ const tools = [
       description: "Get all liquidity pools from W-Swap DEX including pool addresses, token pairs, reserves, and liquidity information",
       parameters: { type: "object", properties: {} }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getHistoricalPrices",
+      description: "Get historical price chart data for WCO, WAVE, or OG88. Returns price and volume over time.",
+      parameters: {
+        type: "object",
+        properties: {
+          token: { 
+            type: "string", 
+            enum: ["WCO", "WAVE", "OG88"],
+            description: "Token symbol to get history for" 
+          },
+          days: { 
+            type: "string", 
+            enum: ["7", "30", "90", "365"],
+            description: "Number of days of historical data (default: 30)"
+          }
+        },
+        required: ["token"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getTrendingCoins",
+      description: "Get the top 7 trending cryptocurrencies right now based on CoinGecko data. Returns coin names, symbols, and rankings.",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getGlobalMarketStats",
+      description: "Get global cryptocurrency market statistics including total market cap, 24h volume, and Bitcoin/Ethereum dominance percentages.",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
   }
 ];
 
@@ -2288,7 +2333,10 @@ async function executeTool(toolName: string, args: any) {
     getInactiveWallets: executeGetInactiveWallets,
     getWcoVolume: executeGetWcoVolume,
     getMostActiveWallet: executeGetMostActiveWallet,
-    getWSwapPools: executeGetWSwapPools
+    getWSwapPools: executeGetWSwapPools,
+    getHistoricalPrices: executeGetHistoricalPrices,
+    getTrendingCoins: executeGetTrendingCoins,
+    getGlobalMarketStats: executeGetGlobalMarketStats
   };
 
   return executors[toolName] ? await executors[toolName](args) : { error: `Unknown tool: ${toolName}` };
@@ -2323,6 +2371,132 @@ async function executeGetWSwapPools() {
   } catch (error) {
     console.error('❌ W-Swap pools fetch failed:', error);
     return { error: `Failed to fetch W-Swap pools: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+// CoinGecko Historical Prices executor
+async function executeGetHistoricalPrices(args: any) {
+  try {
+    const { token, days = "30" } = args;
+    const coinIdMap: Record<string, string> = {
+      WCO: "wadzcoin",
+      WAVE: "w-chain",
+      OG88: "og88-token"
+    };
+    
+    const coinId = coinIdMap[token.toUpperCase()];
+    if (!coinId) {
+      return { error: `Unknown token: ${token}` };
+    }
+    
+    const cacheKey = `coingecko:chart:${coinId}:${days}`;
+    const cached = getCached(cacheKey, 3600000); // 1 hour cache
+    
+    if (cached) {
+      console.log(`✅ Cache hit for historical prices: ${token} ${days}d`);
+      return cached;
+    }
+    
+    console.log(`📊 Fetching historical prices for ${token} (${days} days)...`);
+    const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      return { error: `CoinGecko API error: ${response.status}` };
+    }
+    
+    const data = await response.json();
+    const formatted = {
+      token: token.toUpperCase(),
+      days: parseInt(days),
+      prices: data.prices.map(([timestamp, price]: [number, number]) => ({
+        timestamp,
+        date: new Date(timestamp).toISOString().split('T')[0],
+        price
+      }))
+    };
+    
+    setCache(cacheKey, formatted);
+    console.log(`✅ Retrieved ${formatted.prices.length} price points for ${token}`);
+    return formatted;
+  } catch (error) {
+    console.error('❌ Historical prices fetch failed:', error);
+    return { error: `Failed to fetch historical data: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+// CoinGecko Trending Coins executor
+async function executeGetTrendingCoins() {
+  try {
+    const cacheKey = 'coingecko:trending';
+    const cached = getCached(cacheKey, 1800000); // 30 min cache
+    
+    if (cached) {
+      console.log('✅ Cache hit for trending coins');
+      return cached;
+    }
+    
+    console.log('🔥 Fetching trending cryptocurrencies...');
+    const response = await fetch('https://api.coingecko.com/api/v3/search/trending');
+    
+    if (!response.ok) {
+      return { error: `CoinGecko API error: ${response.status}` };
+    }
+    
+    const data = await response.json();
+    const formatted = {
+      trending: data.coins.slice(0, 7).map((item: any) => ({
+        name: item.item.name,
+        symbol: item.item.symbol,
+        rank: item.item.market_cap_rank,
+        price_btc: item.item.price_btc,
+        thumb: item.item.thumb
+      }))
+    };
+    
+    setCache(cacheKey, formatted);
+    console.log(`✅ Retrieved ${formatted.trending.length} trending coins`);
+    return formatted;
+  } catch (error) {
+    console.error('❌ Trending coins fetch failed:', error);
+    return { error: `Failed to fetch trending data: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+// CoinGecko Global Market Stats executor
+async function executeGetGlobalMarketStats() {
+  try {
+    const cacheKey = 'coingecko:global';
+    const cached = getCached(cacheKey, 900000); // 15 min cache
+    
+    if (cached) {
+      console.log('✅ Cache hit for global market stats');
+      return cached;
+    }
+    
+    console.log('🌍 Fetching global crypto market stats...');
+    const response = await fetch('https://api.coingecko.com/api/v3/global');
+    
+    if (!response.ok) {
+      return { error: `CoinGecko API error: ${response.status}` };
+    }
+    
+    const data = await response.json();
+    const formatted = {
+      total_market_cap_usd: data.data.total_market_cap.usd,
+      total_volume_24h_usd: data.data.total_volume.usd,
+      market_cap_change_24h: data.data.market_cap_change_percentage_24h_usd,
+      btc_dominance: data.data.market_cap_percentage.btc,
+      eth_dominance: data.data.market_cap_percentage.eth,
+      active_cryptocurrencies: data.data.active_cryptocurrencies
+    };
+    
+    setCache(cacheKey, formatted);
+    console.log('✅ Retrieved global market stats');
+    return formatted;
+  } catch (error) {
+    console.error('❌ Global market stats fetch failed:', error);
+    return { error: `Failed to fetch global stats: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -2730,6 +2904,15 @@ Real-time USD prices available via Oracle API (cached 1 minute):
 - Prices update in real-time based on market activity
 - WAVE price depends on both WCO price and trading pair data from W-Chain DEX
 
+**NEW: Market Intelligence & Historical Data (CoinGecko Integration):**
+You now have access to rich market intelligence tools powered by CoinGecko:
+- **Historical Price Charts**: Use getHistoricalPrices to show price trends over 7d, 30d, 90d, or 1 year for WCO, WAVE, and OG88
+- **Trending Cryptocurrencies**: Use getTrendingCoins to discover what's hot in crypto right now (top 7 trending tokens)
+- **Global Market Context**: Use getGlobalMarketStats to provide broader market perspective (total market cap, 24h volume, BTC/ETH dominance)
+- When users ask about price history, trends, or market conditions, leverage these tools to provide rich, data-driven insights
+- Combine W-Chain data with global market context to show how WCO performs relative to the overall crypto market
+- Historical data helps answer questions like "How has WCO performed this month?" or "Is WCO outperforming the market?"
+
 Response Format:
 {
   "price": number (USD),
@@ -3108,6 +3291,40 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
             cardsToSend.push({
               type: 'price',
               data: prices
+            });
+          }
+        }
+        
+        // Historical chart card detection
+        if (toolResult.name === 'getHistoricalPrices') {
+          if (resultData.token && resultData.prices && resultData.prices.length > 0) {
+            cardsToSend.push({
+              type: 'historical_chart',
+              data: {
+                token: resultData.token,
+                days: resultData.days,
+                prices: resultData.prices
+              }
+            });
+          }
+        }
+        
+        // Trending coins card detection
+        if (toolResult.name === 'getTrendingCoins') {
+          if (resultData.trending && resultData.trending.length > 0) {
+            cardsToSend.push({
+              type: 'trending',
+              data: resultData.trending
+            });
+          }
+        }
+        
+        // Global market stats card detection
+        if (toolResult.name === 'getGlobalMarketStats') {
+          if (resultData.total_market_cap_usd !== undefined) {
+            cardsToSend.push({
+              type: 'market_overview',
+              data: resultData
             });
           }
         }

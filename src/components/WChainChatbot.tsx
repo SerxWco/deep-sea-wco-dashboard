@@ -10,6 +10,9 @@ import { BubblesAvatar } from './BubblesAvatar';
 import { BubblesTokenCard } from './bubbles/BubblesTokenCard';
 import { BubblesWalletCard } from './bubbles/BubblesWalletCard';
 import { BubblesPriceCard } from './bubbles/BubblesPriceCard';
+import { BubblesHistoricalChart } from './bubbles/BubblesHistoricalChart';
+import { BubblesTrendingCard } from './bubbles/BubblesTrendingCard';
+import { BubblesMarketOverview } from './bubbles/BubblesMarketOverview';
 
 
 /**
@@ -125,6 +128,9 @@ export const WChainChatbot = () => {
                             {card.type === 'token' && <BubblesTokenCard data={card.data} />}
                             {card.type === 'wallet' && <BubblesWalletCard data={card.data} />}
                             {card.type === 'price' && <BubblesPriceCard data={card.data} />}
+                            {card.type === 'historical_chart' && <BubblesHistoricalChart data={card.data} />}
+                            {card.type === 'trending' && <BubblesTrendingCard data={card.data} />}
+                            {card.type === 'market_overview' && <BubblesMarketOverview data={card.data} />}
                           </div>
                         ))}
                       </div>

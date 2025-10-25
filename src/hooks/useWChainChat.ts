@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ChatCard {
-  type: 'token' | 'wallet' | 'price';
+  type: 'token' | 'wallet' | 'price' | 'historical_chart' | 'trending' | 'market_overview';
   data: any;
 }
 
