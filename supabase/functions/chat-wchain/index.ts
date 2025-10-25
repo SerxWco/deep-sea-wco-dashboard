@@ -2430,6 +2430,71 @@ serve(async (req) => {
     const { messages, conversationId, sessionId } = validationResult.data;
     console.log('✅ Validated request - User:', userId, 'Messages:', messages.length, 'ConversationId:', conversationId, 'SessionId:', sessionId);
     
+    // ====================================
+    // 🗄️ RESPONSE CACHING
+    // ====================================
+    // Helper to normalize query for cache lookup
+    function normalizeQuery(text: string): string {
+      return text
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s]/g, '') // Remove special chars
+        .replace(/\s+/g, ' '); // Normalize whitespace
+    }
+    
+    // Helper to generate cache key hash
+    async function generateCacheHash(text: string): Promise<string> {
+      const normalized = normalizeQuery(text);
+      const encoder = new TextEncoder();
+      const data = encoder.encode(normalized);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    
+    // Check cache for this query
+    const latestUserMessage = messages[messages.length - 1]?.content || '';
+    if (latestUserMessage) {
+      try {
+        const queryHash = await generateCacheHash(latestUserMessage);
+        
+        // Look for cached response
+        const { data: cachedResponse } = await supabase
+          .from('chat_cache')
+          .select('response, hit_count, id')
+          .eq('query_hash', queryHash)
+          .gt('expires_at', new Date().toISOString())
+          .maybeSingle();
+        
+        if (cachedResponse) {
+          console.log('💾 Cache HIT! Returning cached response (hits:', cachedResponse.hit_count + 1, ')');
+          
+          // Update hit count and last accessed time
+          await supabase
+            .from('chat_cache')
+            .update({ 
+              hit_count: cachedResponse.hit_count + 1,
+              last_accessed: new Date().toISOString()
+            })
+            .eq('id', cachedResponse.id);
+          
+          // Return cached response directly
+          return new Response(JSON.stringify({ 
+            message: cachedResponse.response,
+            conversationId,
+            cached: true 
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        console.log('💨 Cache MISS - proceeding with AI');
+      } catch (err) {
+        console.error('Cache lookup error:', err);
+        // Continue with normal processing if cache fails
+      }
+    }
+    
     // Handle conversation memory
     let finalConversationId = conversationId;
     let conversationHistory: any[] = [];
@@ -3068,6 +3133,48 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
               .eq('id', finalConversationId);
             
             console.log('💾 Saved conversation messages');
+          }
+          
+          // ====================================
+          // 🗄️ CACHE RESPONSE (for common queries)
+          // ====================================
+          // Cache responses for common, factual queries (not personalized or time-sensitive)
+          const shouldCache = (
+            fullMessage.length < 2000 && // Don't cache very long responses
+            executedToolCalls.length === 0 && // Don't cache tool-based responses
+            !/\b(you|your|wallet|address|0x[a-fA-F0-9]{40})\b/i.test(latestUserMessage) // Skip personalized queries
+          );
+          
+          if (shouldCache && latestUserMessage) {
+            try {
+              const queryHash = await generateCacheHash(latestUserMessage);
+              const expiresAt = new Date();
+              
+              // Cache duration based on query type
+              if (/price|usd|value/i.test(latestUserMessage)) {
+                expiresAt.setMinutes(expiresAt.getMinutes() + 2); // Price queries: 2 min
+              } else if (/holders|total|count/i.test(latestUserMessage)) {
+                expiresAt.setMinutes(expiresAt.getMinutes() + 30); // Stats queries: 30 min
+              } else {
+                expiresAt.setHours(expiresAt.getHours() + 2); // General queries: 2 hours
+              }
+              
+              await supabase.from('chat_cache').upsert({
+                query_hash: queryHash,
+                query_text: latestUserMessage.slice(0, 500), // Store first 500 chars
+                response: fullMessage,
+                expires_at: expiresAt.toISOString(),
+                hit_count: 1,
+                last_accessed: new Date().toISOString()
+              }, {
+                onConflict: 'query_hash'
+              });
+              
+              console.log('💾 Cached response for future use');
+            } catch (err) {
+              console.error('Failed to cache response:', err);
+              // Don't fail the request if caching fails
+            }
           }
 
           controller.close();

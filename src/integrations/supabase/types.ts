@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_cache: {
+        Row: {
+          created_at: string
+          expires_at: string
+          hit_count: number
+          id: string
+          last_accessed: string
+          query_hash: string
+          query_text: string
+          response: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          hit_count?: number
+          id?: string
+          last_accessed?: string
+          query_hash: string
+          query_text: string
+          response: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          hit_count?: number
+          id?: string
+          last_accessed?: string
+          query_hash?: string
+          query_text?: string
+          response?: string
+        }
+        Relationships: []
+      }
       chat_conversations: {
         Row: {
           created_at: string
@@ -324,6 +357,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_expired_cache: { Args: never; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
