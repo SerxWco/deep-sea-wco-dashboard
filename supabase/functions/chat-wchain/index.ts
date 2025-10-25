@@ -2850,7 +2850,6 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
 - Use getSupplyInfo tool for tokenomics queries (circulating supply, locked amounts, vesting breakdowns, burned tokens)`;
 
     // Quick intent router for common holder queries (answer directly without LLM when possible)
-    const latestUserMessage = Array.isArray(messages) && messages.length > 0 ? (messages[messages.length - 1]?.content || '') : '';
     const msgLower = (latestUserMessage || '').toLowerCase();
 
     async function respondAndStore(messageText: string) {
