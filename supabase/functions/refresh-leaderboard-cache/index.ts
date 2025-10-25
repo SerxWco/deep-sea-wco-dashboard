@@ -52,8 +52,8 @@ const ALL_CATEGORIES = [
 
 function categorizeWallet(balance: number, address: string) {
   const isWrapped = WRAPPED_WCO.includes(address.toLowerCase());
-  const isFlagship = FLAGSHIP_WALLETS[address];
-  const isExchange = EXCHANGE_WALLETS[address];
+  const isFlagship = FLAGSHIP_WALLETS[address.toLowerCase()];
+  const isExchange = EXCHANGE_WALLETS[address.toLowerCase()];
 
   if (isWrapped) {
     return { category: 'Bridge/Wrapped', emoji: '🌉', label: 'Wrapped WCO', isFlagship: false, isExchange: false, isWrapped: true };
