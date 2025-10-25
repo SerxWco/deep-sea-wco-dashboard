@@ -1,12 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
+export interface ChatCard {
+  type: 'token' | 'wallet' | 'price';
+  data: any;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   id?: string;
   feedback?: 'positive' | 'negative' | null;
+  cards?: ChatCard[];
 }
 
 // Generate a persistent session ID
@@ -133,6 +139,7 @@ export const useWChainChat = ({ userId }: UseWChainChatParams) => {
 
       let accumulatedContent = '';
       let buffer = '';
+      const accumulatedCards: ChatCard[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -158,7 +165,25 @@ export const useWChainChat = ({ userId }: UseWChainChatParams) => {
                 const updated = [...prev];
                 updated[assistantMessageIndex] = {
                   ...updated[assistantMessageIndex],
-                  content: accumulatedContent
+                  content: accumulatedContent,
+                  cards: accumulatedCards.length > 0 ? accumulatedCards : undefined
+                };
+                return updated;
+              });
+            }
+
+            if (parsed.card) {
+              accumulatedCards.push({
+                type: parsed.card.type,
+                data: parsed.card.data
+              });
+              // Update message with cards
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[assistantMessageIndex] = {
+                  ...updated[assistantMessageIndex],
+                  content: accumulatedContent,
+                  cards: [...accumulatedCards]
                 };
                 return updated;
               });

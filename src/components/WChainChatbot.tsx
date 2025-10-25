@@ -7,6 +7,9 @@ import { useWChainChat } from '@/hooks/useWChainChat';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { BubblesAvatar } from './BubblesAvatar';
+import { BubblesTokenCard } from './bubbles/BubblesTokenCard';
+import { BubblesWalletCard } from './bubbles/BubblesWalletCard';
+import { BubblesPriceCard } from './bubbles/BubblesPriceCard';
 
 
 /**
@@ -113,19 +116,37 @@ export const WChainChatbot = () => {
                   {message.role === 'assistant' && (
                     <BubblesAvatar size="sm" state="idle" className="mt-1 flex-shrink-0" />
                   )}
-                  <div className="flex flex-col gap-1">
-                    <div
-                      className={`rounded-lg px-4 py-2 ${
-                        message.role === 'user'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-gradient-to-br from-muted via-muted to-primary/10 text-foreground border border-primary/20'
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                      <span className="text-xs opacity-70 mt-1 block">
-                        {message.timestamp.toLocaleTimeString()}
-                      </span>
-                    </div>
+                  <div className="flex flex-col gap-2">
+                    {/* Cards */}
+                    {message.cards && message.cards.length > 0 && (
+                      <div className="space-y-2">
+                        {message.cards.map((card, cardIdx) => (
+                          <div key={cardIdx}>
+                            {card.type === 'token' && <BubblesTokenCard data={card.data} />}
+                            {card.type === 'wallet' && <BubblesWalletCard data={card.data} />}
+                            {card.type === 'price' && <BubblesPriceCard data={card.data} />}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Message Text */}
+                    {message.content && (
+                      <div
+                        className={`rounded-lg px-4 py-2 ${
+                          message.role === 'user'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-gradient-to-br from-muted via-muted to-primary/10 text-foreground border border-primary/20'
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        <span className="text-xs opacity-70 mt-1 block">
+                          {message.timestamp.toLocaleTimeString()}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Feedback buttons */}
                     {message.role === 'assistant' && (
                       <div className="flex gap-1 ml-1">
                         <Button

@@ -3026,6 +3026,99 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
       break;
     }
 
+    // ====================================
+    // 🎨 DETECT CARD DATA FROM TOOL RESULTS
+    // ====================================
+    const cardsToSend: any[] = [];
+    
+    // Check if we executed tools that should generate cards
+    for (const toolResult of executedToolResults) {
+      try {
+        const resultData = JSON.parse(toolResult.content);
+        
+        // Token card detection
+        if (toolResult.name === 'getTokenPrice' || toolResult.name === 'getTokenInfo') {
+          if (resultData.address && resultData.symbol) {
+            cardsToSend.push({
+              type: 'token',
+              data: {
+                address: resultData.address,
+                name: resultData.name || resultData.symbol,
+                symbol: resultData.symbol,
+                price: resultData.price || resultData.exchange_rate,
+                priceChange24h: resultData.priceChange24h,
+                holders: resultData.holders_count,
+                marketCap: resultData.circulating_market_cap,
+                iconUrl: resultData.icon_url
+              }
+            });
+          }
+        }
+        
+        // Wallet card detection
+        if (toolResult.name === 'getWalletInfo' || toolResult.name === 'getHolderDetails') {
+          if (resultData.address && resultData.balance) {
+            const walletData: any = {
+              address: resultData.address,
+              balance: resultData.balance,
+              balanceUsd: resultData.balanceUsd,
+              transactionCount: resultData.transactionCount || resultData.transaction_count,
+              category: resultData.category,
+              emoji: resultData.emoji,
+              label: resultData.label
+            };
+            
+            // Add top tokens if available
+            if (resultData.tokens && Array.isArray(resultData.tokens)) {
+              walletData.topTokens = resultData.tokens.slice(0, 3).map((t: any) => ({
+                symbol: t.symbol,
+                balance: t.balance,
+                usdValue: t.usdValue
+              }));
+            }
+            
+            cardsToSend.push({
+              type: 'wallet',
+              data: walletData
+            });
+          }
+        }
+        
+        // Price comparison card detection (multiple tokens)
+        if (toolResult.name === 'getMultiplePrices' || 
+            (executedToolCalls.filter(tc => tc.function.name === 'getTokenPrice').length > 1)) {
+          const prices: any[] = [];
+          
+          for (const tr of executedToolResults) {
+            if (tr.name === 'getTokenPrice') {
+              const data = JSON.parse(tr.content);
+              if (data.symbol && data.price !== undefined) {
+                prices.push({
+                  symbol: data.symbol,
+                  name: data.name || data.symbol,
+                  price: data.price,
+                  change24h: data.priceChange24h,
+                  iconUrl: data.icon_url
+                });
+              }
+            }
+          }
+          
+          if (prices.length > 1) {
+            cardsToSend.push({
+              type: 'price',
+              data: prices
+            });
+          }
+        }
+      } catch (e) {
+        // Skip invalid tool results
+        console.error('Card detection error:', e);
+      }
+    }
+    
+    console.log(`🎨 Generated ${cardsToSend.length} interactive cards`);
+
     // Now stream the final response
     const streamResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -3066,6 +3159,11 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          // Send cards first before streaming text
+          for (const card of cardsToSend) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ card })}\n\n`));
+          }
+          
           const reader = streamResponse.body?.getReader();
           const decoder = new TextDecoder();
           
