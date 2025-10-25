@@ -93,38 +93,91 @@ export const useWChainChat = ({ userId }: UseWChainChatParams) => {
       };
       setMessages(prev => [...prev, userMessage]);
 
-      // Call edge function (userId comes from JWT, not request body)
-      const { data, error: functionError } = await supabase.functions.invoke('chat-wchain', {
-        body: {
-          messages: [
-            ...messages.map(m => ({ role: m.role, content: m.content })),
-            { role: 'user', content }
-          ],
-          conversationId,
-          sessionId
-        }
-      });
-
-      if (functionError) {
-        throw functionError;
-      }
-
-      // Update conversation ID if returned
-      if (data.conversationId && !conversationId) {
-        setConversationId(data.conversationId);
-      }
-
-      // Add assistant response
-      const assistantMessage: ChatMessage = {
+      // Add placeholder assistant message that will be updated as stream arrives
+      const placeholderMessage: ChatMessage = {
         role: 'assistant',
-        content: data.message,
+        content: '',
         timestamp: new Date()
       };
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages(prev => [...prev, placeholderMessage]);
+      const assistantMessageIndex = messages.length + 1;
+
+      // Stream response from edge function
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-wchain`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            messages: [
+              ...messages.map(m => ({ role: m.role, content: m.content })),
+              { role: 'user', content }
+            ],
+            conversationId,
+            sessionId
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) throw new Error('No reader available');
+
+      let accumulatedContent = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.trim() || line.startsWith(':')) continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const data = line.slice(6);
+          
+          try {
+            const parsed = JSON.parse(data);
+            
+            if (parsed.delta) {
+              accumulatedContent += parsed.delta;
+              // Update the assistant message in place
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[assistantMessageIndex] = {
+                  ...updated[assistantMessageIndex],
+                  content: accumulatedContent
+                };
+                return updated;
+              });
+            }
+
+            if (parsed.done && parsed.conversationId && !conversationId) {
+              setConversationId(parsed.conversationId);
+            }
+          } catch (e) {
+            // Skip invalid JSON
+          }
+        }
+      }
 
     } catch (err) {
       console.error('Error sending message:', err);
       setError(err instanceof Error ? err.message : 'Failed to send message');
+      // Remove placeholder message on error
+      setMessages(prev => prev.slice(0, -1));
     } finally {
       setLoading(false);
     }

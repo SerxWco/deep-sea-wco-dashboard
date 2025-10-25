@@ -2890,6 +2890,7 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
     const executedToolCalls: any[] = [];
     const executedToolResults: any[] = [];
 
+    // First, execute tools if needed (non-streaming)
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
@@ -2957,53 +2958,133 @@ When users ask what they can do on Ocean Creatures or Kraken pages, explain they
         continue;
       }
 
-      // No more tools requested, take the assistant content
-      finalAssistantMessage = choice?.message?.content || '';
+      // No more tools requested, proceed to streaming final response
       break;
     }
 
-    const latencyMs = Date.now() - startTime;
-    console.log(`🧠 Model: ${modelToUse}, rounds: ${lastToolCalls ? 'with tools' : 'no tools'}, latency: ${latencyMs}ms`);
+    // Now stream the final response
+    const streamResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: modelToUse,
+        messages: accumulatedMessages,
+        stream: true,
+        ...decoding
+      }),
+    });
 
-    // Decide message to return
-    const directMessage = finalAssistantMessage || 'Sorry, I could not generate a response.';
-    
-    // Store messages in database if we have a conversation ID (only for authenticated users)
-    if (finalConversationId && userId) {
-      const userMessage = messages[messages.length - 1];
-      
-      // Store user message
-      await supabase.from('chat_messages').insert({
-        conversation_id: finalConversationId,
-        role: 'user',
-        content: userMessage.content,
-        tool_calls: null,
-        tool_results: null
-      });
-      
-      // Store assistant message (include tool metadata if any were executed)
-      await supabase.from('chat_messages').insert({
-        conversation_id: finalConversationId,
-        role: 'assistant',
-        content: directMessage,
-        tool_calls: executedToolCalls.length > 0 ? executedToolCalls : null,
-        tool_results: executedToolResults.length > 0 ? executedToolResults : null
-      });
-      
-      // Update conversation timestamp
-      await supabase
-        .from('chat_conversations')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', finalConversationId);
-      
-      console.log('💾 Saved conversation messages');
+    if (!streamResponse.ok) {
+      if (streamResponse.status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (streamResponse.status === 402) {
+        return new Response(JSON.stringify({ error: "Payment required, please add funds to your Lovable AI workspace." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`AI gateway error: ${streamResponse.status}`);
     }
-    
-    return new Response(JSON.stringify({ 
-      message: directMessage,
-      conversationId: finalConversationId 
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+
+    const latencyMs = Date.now() - startTime;
+    console.log(`🧠 Model: ${modelToUse}, streaming enabled, tool execution: ${latencyMs}ms`);
+
+    // Create a readable stream that processes SSE and stores messages
+    let fullMessage = '';
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const reader = streamResponse.body?.getReader();
+          const decoder = new TextDecoder();
+          
+          if (!reader) throw new Error('No reader available');
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+              if (!line.trim() || line.startsWith(':')) continue;
+              if (!line.startsWith('data: ')) continue;
+
+              const data = line.slice(6);
+              if (data === '[DONE]') continue;
+
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices?.[0]?.delta?.content;
+                
+                if (content) {
+                  fullMessage += content;
+                  // Send SSE to client
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: content })}\n\n`));
+                }
+              } catch (e) {
+                // Skip invalid JSON
+              }
+            }
+          }
+
+          // Send completion event
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+            done: true, 
+            conversationId: finalConversationId 
+          })}\n\n`));
+
+          // Store messages in database (only for authenticated users)
+          if (finalConversationId && userId) {
+            const userMessage = messages[messages.length - 1];
+            
+            await supabase.from('chat_messages').insert({
+              conversation_id: finalConversationId,
+              role: 'user',
+              content: userMessage.content,
+              tool_calls: null,
+              tool_results: null
+            });
+            
+            await supabase.from('chat_messages').insert({
+              conversation_id: finalConversationId,
+              role: 'assistant',
+              content: fullMessage,
+              tool_calls: executedToolCalls.length > 0 ? executedToolCalls : null,
+              tool_results: executedToolResults.length > 0 ? executedToolResults : null
+            });
+            
+            await supabase
+              .from('chat_conversations')
+              .update({ updated_at: new Date().toISOString() })
+              .eq('id', finalConversationId);
+            
+            console.log('💾 Saved conversation messages');
+          }
+
+          controller.close();
+        } catch (error) {
+          console.error('Stream error:', error);
+          controller.error(error);
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     });
 
   } catch (error) {

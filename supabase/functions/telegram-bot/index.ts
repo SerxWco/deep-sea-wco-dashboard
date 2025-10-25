@@ -211,29 +211,71 @@ serve(async (req) => {
     
     const conversationId = conversations && conversations.length > 0 ? conversations[0].id : null;
     
-    // Call chat-wchain function
+    // Call chat-wchain function with streaming
     console.log('Calling chat-wchain with session:', sessionId);
-    const { data, error } = await supabase.functions.invoke('chat-wchain', {
-      body: {
+    
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/chat-wchain`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
         messages: [{ role: 'user', content: messageText }],
         conversationId,
         sessionId
-      }
+      }),
     });
-    
-    if (error) {
-      console.error('Error calling chat-wchain:', error);
+
+    if (!response.ok) {
+      console.error('Error calling chat-wchain:', response.status);
       await sendTelegramMessage(
         chatId,
         escapeMarkdown('Sorry, I encountered an error processing your request. Please try again.')
       );
       return new Response('OK', { status: 200 });
     }
+
+    // Accumulate streaming response
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
     
-    console.log('Received response from chat-wchain');
+    if (!reader) {
+      throw new Error('No reader available');
+    }
+
+    let fullMessage = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.trim() || line.startsWith(':')) continue;
+        if (!line.startsWith('data: ')) continue;
+
+        const data = line.slice(6);
+        
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.delta) {
+            fullMessage += parsed.delta;
+          }
+        } catch (e) {
+          // Skip invalid JSON
+        }
+      }
+    }
+    
+    console.log('Received complete response from chat-wchain');
     
     // Format and send response
-    const responseText = data.message || 'I apologize, but I couldn\'t generate a response.';
+    const responseText = fullMessage || 'I apologize, but I couldn\'t generate a response.';
     const formattedResponse = formatForTelegram(responseText);
     
     await sendTelegramMessage(chatId, formattedResponse);
