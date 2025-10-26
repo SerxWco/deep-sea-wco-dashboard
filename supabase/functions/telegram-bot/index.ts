@@ -82,6 +82,191 @@ async function sendTelegramMessage(chatId: number, text: string, parseMode: stri
   }
 }
 
+// Send photo to Telegram
+async function sendTelegramPhoto(chatId: number, photoUrl: string, caption?: string) {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: photoUrl,
+        caption: caption ? escapeMarkdown(caption) : undefined,
+        parse_mode: caption ? 'MarkdownV2' : undefined
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Telegram photo API error:', error);
+    }
+  } catch (error) {
+    console.error('Error sending photo to Telegram:', error);
+  }
+}
+
+// Generate chart image URL using QuickChart
+function generateChartImage(chartConfig: {
+  type: 'line' | 'bar' | 'horizontalBar' | 'pie';
+  title: string;
+  labels: string[];
+  datasets: Array<{
+    label: string;
+    data: number[];
+    backgroundColor?: string | string[];
+    borderColor?: string;
+    fill?: boolean;
+  }>;
+}): string {
+  const { type, title, labels, datasets } = chartConfig;
+  
+  const chartJsConfig = {
+    type,
+    data: {
+      labels,
+      datasets: datasets.map(ds => ({
+        label: ds.label,
+        data: ds.data,
+        backgroundColor: ds.backgroundColor || 'rgba(59, 130, 246, 0.5)',
+        borderColor: ds.borderColor || 'rgb(59, 130, 246)',
+        fill: ds.fill !== undefined ? ds.fill : false,
+        borderWidth: 2
+      }))
+    },
+    options: {
+      title: {
+        display: true,
+        text: title,
+        fontSize: 16
+      },
+      legend: {
+        display: datasets.length > 1
+      },
+      scales: {
+        xAxes: [{
+          gridLines: {
+            display: type === 'line'
+          }
+        }],
+        yAxes: [{
+          ticks: {
+            beginAtZero: type !== 'line'
+          }
+        }]
+      }
+    }
+  };
+  
+  const encodedConfig = encodeURIComponent(JSON.stringify(chartJsConfig));
+  return `https://quickchart.io/chart?c=${encodedConfig}&width=800&height=400&backgroundColor=white`;
+}
+
+// Detect and generate charts from response
+async function detectAndSendCharts(chatId: number, fullResponse: string) {
+  const response = fullResponse.toLowerCase();
+  
+  try {
+    // Historical price chart
+    if (response.includes('price') && (response.includes('history') || response.includes('trend') || response.includes('chart') || response.includes('past') || response.includes('days') || response.includes('weeks'))) {
+      console.log('Detected price history query - attempting chart generation');
+      
+      // Extract price data patterns from response
+      const pricePattern = /(\$?0\.\d{4,}|\d+\.\d{2})/g;
+      const prices = fullResponse.match(pricePattern);
+      
+      if (prices && prices.length >= 5) {
+        const numericPrices = prices.slice(0, 30).map(p => parseFloat(p.replace('$', '')));
+        const labels = numericPrices.map((_, i) => {
+          if (numericPrices.length > 24) return `Day ${i + 1}`;
+          return `Point ${i + 1}`;
+        });
+        
+        const chartUrl = generateChartImage({
+          type: 'line',
+          title: 'WCO Price Trend',
+          labels,
+          datasets: [{
+            label: 'Price (USD)',
+            data: numericPrices,
+            borderColor: 'rgb(34, 197, 94)',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            fill: true
+          }]
+        });
+        
+        await sendTelegramPhoto(chatId, chartUrl, '📈 Price Chart');
+        return;
+      }
+    }
+    
+    // Trending coins chart
+    if (response.includes('trending') || response.includes('top movers') || response.includes('gainers')) {
+      console.log('Detected trending coins query');
+      
+      // Look for percentage patterns
+      const percentPattern = /([+-]?\d+\.?\d*%)/g;
+      const percentages = fullResponse.match(percentPattern);
+      
+      if (percentages && percentages.length >= 3) {
+        const values = percentages.slice(0, 7).map(p => parseFloat(p.replace('%', '')));
+        const labels = values.map((_, i) => `Token ${i + 1}`);
+        const colors = values.map(v => v >= 0 ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)');
+        
+        const chartUrl = generateChartImage({
+          type: 'horizontalBar',
+          title: 'Trending Tokens (24h Change)',
+          labels,
+          datasets: [{
+            label: '24h Change %',
+            data: values,
+            backgroundColor: colors
+          }]
+        });
+        
+        await sendTelegramPhoto(chatId, chartUrl, '🔥 Trending Chart');
+        return;
+      }
+    }
+    
+    // Market stats chart
+    if ((response.includes('market') && response.includes('cap')) || response.includes('dominance') || response.includes('total volume')) {
+      console.log('Detected market overview query');
+      
+      // Try to extract market cap and volume numbers
+      const largeNumberPattern = /(\d{1,3}(?:,\d{3})*(?:\.\d+)?[BMK]?)/g;
+      const numbers = fullResponse.match(largeNumberPattern);
+      
+      if (numbers && numbers.length >= 2) {
+        const values = numbers.slice(0, 4).map(n => {
+          const num = parseFloat(n.replace(/,/g, ''));
+          if (n.includes('B')) return num * 1000000000;
+          if (n.includes('M')) return num * 1000000;
+          if (n.includes('K')) return num * 1000;
+          return num;
+        });
+        
+        const chartUrl = generateChartImage({
+          type: 'bar',
+          title: 'Market Overview',
+          labels: ['Market Cap', 'Volume', 'Metric 3', 'Metric 4'].slice(0, values.length),
+          datasets: [{
+            label: 'Value',
+            data: values,
+            backgroundColor: 'rgba(59, 130, 246, 0.8)'
+          }]
+        });
+        
+        await sendTelegramPhoto(chatId, chartUrl, '📊 Market Stats');
+        return;
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error generating chart:', error);
+    // Silently fail - user still gets text response
+  }
+}
+
 // Handle commands
 async function handleCommand(command: string, chatId: number, userId: number): Promise<boolean> {
   switch (command) {
@@ -279,6 +464,9 @@ serve(async (req) => {
     const formattedResponse = formatForTelegram(responseText);
     
     await sendTelegramMessage(chatId, formattedResponse);
+    
+    // Try to detect and send charts
+    await detectAndSendCharts(chatId, fullMessage);
     
     return new Response('OK', { status: 200 });
     
