@@ -8,7 +8,6 @@ import { useWCOSupplyInfo } from "@/hooks/useWCOSupplyInfo";
 import { useWChainPriceAPI } from "@/hooks/useWChainPriceAPI";
 import { formatCurrency, formatPercentage, formatNumber } from "@/utils/formatters";
 import { formatExactNumber } from "@/utils/exactFormatters";
-import { WChainChatbot } from "@/components/WChainChatbot";
 import { 
   DollarSign, 
   TrendingUp, 
@@ -53,44 +52,36 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Hero Section - Bubbles + Key Metrics */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Bubbles Chatbot - Takes 3 columns on large screens */}
-          <div className="lg:col-span-3">
-            <WChainChatbot />
-          </div>
+        {/* Top 3 Key Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <CryptoMetricCard
+            title="WCO Price"
+            value={wcoPrice?.price ? formatCurrency(wcoPrice.price) : (data ? formatCurrency(data.current_price) : (loading || priceLoading) ? "Loading..." : "$0.0000")}
+            change={(data && data.price_change_percentage_24h !== undefined) ? { 
+              value: formatPercentage(data.price_change_percentage_24h), 
+              isPositive: data.price_change_percentage_24h >= 0 
+            } : undefined}
+            icon={<DollarSign className="h-5 w-5" />}
+            tooltip="Current market price of WCO tokens, updated in real-time from exchange data."
+          />
           
-          {/* Top 3 Key Metrics - Takes 2 columns on large screens */}
-          <div className="lg:col-span-2 grid grid-cols-1 gap-6">
-            <CryptoMetricCard
-              title="WCO Price"
-              value={wcoPrice?.price ? formatCurrency(wcoPrice.price) : (data ? formatCurrency(data.current_price) : (loading || priceLoading) ? "Loading..." : "$0.0000")}
-              change={(data && data.price_change_percentage_24h !== undefined) ? { 
-                value: formatPercentage(data.price_change_percentage_24h), 
-                isPositive: data.price_change_percentage_24h >= 0 
-              } : undefined}
-              icon={<DollarSign className="h-5 w-5" />}
-              tooltip="Current market price of WCO tokens, updated in real-time from exchange data."
-            />
-            
-            <CryptoMetricCard
-              title="24h Change"
-              value={data ? formatPercentage(data.price_change_percentage_24h) : loading ? "Loading..." : "+0.00%"}
-              change={data ? { 
-                value: formatCurrency(Math.abs(data.price_change_24h)), 
-                isPositive: data.price_change_24h >= 0 
-              } : undefined}
-              icon={<TrendingUp className="h-5 w-5" />}
-              tooltip="Percentage and dollar amount change in WCO price over the last 24 hours."
-            />
-            
-            <CryptoMetricCard
-              title="Market Cap"
-              value={data ? formatCurrency(data.market_cap) : loading ? "Loading..." : "$0.00M"}
-              icon={<BarChart3 className="h-5 w-5" />}
-              tooltip="Total market value of all circulating WCO tokens, calculated by multiplying the current price by circulating supply."
-            />
-          </div>
+          <CryptoMetricCard
+            title="24h Change"
+            value={data ? formatPercentage(data.price_change_percentage_24h) : loading ? "Loading..." : "+0.00%"}
+            change={data ? { 
+              value: formatCurrency(Math.abs(data.price_change_24h)), 
+              isPositive: data.price_change_24h >= 0 
+            } : undefined}
+            icon={<TrendingUp className="h-5 w-5" />}
+            tooltip="Percentage and dollar amount change in WCO price over the last 24 hours."
+          />
+          
+          <CryptoMetricCard
+            title="Market Cap"
+            value={data ? formatCurrency(data.market_cap) : loading ? "Loading..." : "$0.00M"}
+            icon={<BarChart3 className="h-5 w-5" />}
+            tooltip="Total market value of all circulating WCO tokens, calculated by multiplying the current price by circulating supply."
+          />
         </div>
 
         {/* Additional Metrics */}
